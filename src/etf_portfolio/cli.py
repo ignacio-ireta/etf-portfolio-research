@@ -467,6 +467,8 @@ def run_backtest(
         fallback_sell_allowed=config.rebalance.fallback_sell_allowed,
         fallback_drift_threshold=fallback_drift_threshold,
         realized_constraint_policy=config.rebalance.realized_constraint_policy,
+        covariance_method=config.optimization.risk_model,
+        expected_return_method=config.optimization.expected_return_estimator,
     )
 
     aligned_benchmark = benchmark_returns.reindex(backtest_result.portfolio_returns.index).dropna()
@@ -575,6 +577,10 @@ def run_backtest(
     }
     if persist_metrics:
         metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        run_record_path = (
+            project_root / config.tracking.artifact_dir / f"backtest_{stage_run_id}.json"
+        )
+        metrics_payload["run_record"] = relative_to_project_root(project_root, run_record_path)
         write_metrics_json(metrics_payload, metrics_path)
         run_record = build_run_record(
             stage="backtest",
@@ -593,12 +599,14 @@ def run_backtest(
             optimization_method=method,
             backtest_metrics=metrics_payload["optimized_strategy"],
         )
-        run_record_path = write_run_record(
+        written_run_record_path = write_run_record(
             run_record,
             artifact_dir=project_root / config.tracking.artifact_dir,
         )
-        metrics_payload["run_record"] = relative_to_project_root(project_root, run_record_path)
-        write_metrics_json(metrics_payload, metrics_path)
+        if written_run_record_path != run_record_path:
+            raise RuntimeError(
+                f"Unexpected run record path: {written_run_record_path} != {run_record_path}"
+            )
     if float(strategy_metrics["Turnover"]) > 1.0:
         log_event(
             LOGGER,
@@ -1025,6 +1033,11 @@ def _report_limitations(config: AppConfig) -> list[str]:
             "depend on the configured historical window."
         ),
         (
+            "Transaction costs and configured slippage are modeled as simple bps assumptions; "
+            "taxes, spreads beyond configured slippage, market impact, and account-specific "
+            "fees are not modeled."
+        ),
+        (
             "FX-adjusted returns, MXN/NOK reporting layers, UCITS comparisons, "
             "and tax-aware domicile analysis are deferred follow-on work."
         ),
@@ -1097,16 +1110,11 @@ def _build_benchmark_suite(
             {config.benchmark.primary: 1.0},
         )
     }
-    if "global_60_40" in config.benchmark.secondary:
-        allocations = config.benchmark.secondary["global_60_40"].allocations
-        suite["60/40 Portfolio"] = _composite_benchmark_returns(
-            returns,
-            allocations,
-        )
-        benchmark_weights["60/40 Portfolio"] = _constant_benchmark_weights(
-            suite["60/40 Portfolio"].index,
-            allocations,
-        )
+    for benchmark_name, benchmark_config in config.benchmark.secondary.items():
+        label = _secondary_benchmark_label(benchmark_name)
+        allocations = benchmark_config.allocations
+        suite[label] = _composite_benchmark_returns(returns, allocations)
+        benchmark_weights[label] = _constant_benchmark_weights(suite[label].index, allocations)
     for objective in config.optimization.benchmark_objectives:
         benchmark_result = run_walk_forward_backtest(
             asset_returns,
@@ -1122,6 +1130,8 @@ def _build_benchmark_suite(
             min_bond_exposure=min_bond_exposure,
             expense_ratios=expense_ratios,
             risk_free_rate=risk_free_rate,
+            covariance_method=config.optimization.risk_model,
+            expected_return_method=config.optimization.expected_return_estimator,
         )
         label = _benchmark_objective_label(objective)
         suite[label] = benchmark_result.portfolio_returns
@@ -1141,6 +1151,8 @@ def _build_benchmark_suite(
         expense_ratios=expense_ratios,
         risk_free_rate=risk_free_rate,
         apply_previous_weights_lag=True,
+        covariance_method=config.optimization.risk_model,
+        expected_return_method=config.optimization.expected_return_estimator,
     )
     suite["Previous Optimized Strategy"] = previous_result.portfolio_returns
     benchmark_weights["Previous Optimized Strategy"] = previous_result.weights
@@ -1156,6 +1168,13 @@ def _benchmark_objective_label(objective: OptimizationObjective) -> str:
         "risk_parity": "Risk-Parity Portfolio",
     }
     return labels[objective]
+
+
+def _secondary_benchmark_label(name: str) -> str:
+    labels = {
+        "global_60_40": "60/40 Portfolio",
+    }
+    return labels.get(name, name)
 
 
 def _optimization_method_for_objective(objective: OptimizationObjective) -> OptimizationMethod:

@@ -12,6 +12,7 @@ from typing import Any
 import pandas as pd
 from plotly.graph_objects import Figure
 from plotly.io import to_html, write_image
+from plotly.offline import get_plotlyjs
 
 from etf_portfolio.backtesting.engine import WalkForwardBacktestResult
 from etf_portfolio.logging_config import get_logger, log_event
@@ -56,6 +57,11 @@ RESEARCH_TOOL_DISCLAIMER = (
     "This report is for research and education only. It is not financial advice, "
     "investment advice, tax advice, legal advice, or a recommendation to buy or sell "
     "any security."
+)
+EXECUTION_COST_LIMITATION = (
+    "Transaction costs and configured slippage are modeled as simple bps assumptions; "
+    "taxes, spreads beyond configured slippage, market impact, and account-specific "
+    "fees are not modeled."
 )
 
 SECTION_EXPLANATIONS: dict[str, tuple[tuple[str, str], ...]] = {
@@ -449,6 +455,7 @@ def generate_html_report(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{html.escape(title)}</title>
+  <script type="text/javascript">{get_plotlyjs()}</script>
   <style>
     :root {{
       --bg: #f4f1ea;
@@ -1285,7 +1292,7 @@ def _table_html(table: pd.DataFrame) -> str:
 def _figure_html(figure: Figure) -> str:
     return (
         '<div class="figure-block">'
-        f"{to_html(figure, full_html=False, include_plotlyjs='inline')}"
+        f"{to_html(figure, full_html=False, include_plotlyjs=False)}"
         "</div>"
     )
 
@@ -1350,8 +1357,7 @@ _DEFAULT_ASSUMPTIONS: tuple[tuple[str, str], ...] = (
     ),
     (
         "costs",
-        "Transaction costs are modeled via the rebalance turnover times the "
-        "configured cost basis points; bid/ask spreads, taxes, and slippage are not modeled.",
+        EXECUTION_COST_LIMITATION,
     ),
     (
         "rebalancing",
@@ -1421,9 +1427,8 @@ def _build_assumptions_appendix(
 
     standard_limitations = [
         RESEARCH_TOOL_DISCLAIMER,
-        "Backtest results assume frictionless execution at end-of-period prices.",
         "Past performance does not guarantee future results.",
-        "Tax treatment, account-specific constraints, and broker fees are not modeled.",
+        EXECUTION_COST_LIMITATION,
         "Provider data may be subject to revisions or vendor outages.",
     ]
     combined_limitations = list(standard_limitations) + list(limitations or [])
@@ -1478,9 +1483,8 @@ def _assumptions_appendix_table(
     )
     standard_limitations = [
         RESEARCH_TOOL_DISCLAIMER,
-        "Backtest results assume frictionless execution at end-of-period prices.",
         "Past performance does not guarantee future results.",
-        "Tax treatment, account-specific constraints, and broker fees are not modeled.",
+        EXECUTION_COST_LIMITATION,
         "Provider data may be subject to revisions or vendor outages.",
     ]
     rows.extend(

@@ -10,8 +10,10 @@ import plotly.graph_objects as go
 import pytest
 
 from etf_portfolio import cli
+from etf_portfolio.backtesting import engine
 from etf_portfolio.config import load_config
 from etf_portfolio.data.providers import PriceDataProvider
+from etf_portfolio.tracking import file_sha256
 
 
 class FakePriceProvider(PriceDataProvider):
@@ -147,6 +149,63 @@ def test_run_all_executes_reproducible_cli_pipeline(tmp_path: Path, monkeypatch)
     assert (tmp_path / "reports/metrics/backtest_metrics.json").exists()
 
 
+def test_backtest_run_record_artifact_shas_match_final_files(tmp_path: Path) -> None:
+    _write_project_files(tmp_path)
+    _initialize_git_repo(tmp_path)
+    prices = _make_prices()
+    processed_dir = tmp_path / "data/processed"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    prices.to_parquet(processed_dir / "prices_validated.parquet")
+    prices.pct_change().dropna().to_parquet(processed_dir / "returns.parquet")
+
+    cli.run_backtest("configs/base.yaml", project_root=tmp_path, lookback_periods=5)
+
+    metrics_payload = json.loads(
+        (tmp_path / "reports/metrics/backtest_metrics.json").read_text(encoding="utf-8")
+    )
+    run_record = json.loads((tmp_path / metrics_payload["run_record"]).read_text(encoding="utf-8"))
+
+    for artifact in run_record["output_artifacts"].values():
+        artifact_path = tmp_path / artifact["path"]
+        assert artifact_path.exists()
+        assert artifact["sha256"] == file_sha256(artifact_path)
+
+
+def test_backtest_passes_configured_risk_model_to_walk_forward_covariance(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _write_project_files(tmp_path)
+    config_path = tmp_path / "configs/base.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            "  risk_model: sample\n",
+            "  risk_model: ledoit_wolf\n",
+        ),
+        encoding="utf-8",
+    )
+    _initialize_git_repo(tmp_path)
+    prices = _make_prices()
+    processed_dir = tmp_path / "data/processed"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    prices.to_parquet(processed_dir / "prices_validated.parquet")
+    prices.pct_change().dropna().to_parquet(processed_dir / "returns.parquet")
+
+    original_calculate_covariance_matrix = engine.calculate_covariance_matrix
+    covariance_methods: list[str] = []
+
+    def spy_calculate_covariance_matrix(*args, **kwargs):
+        covariance_methods.append(kwargs.get("method", "sample"))
+        return original_calculate_covariance_matrix(*args, **kwargs)
+
+    monkeypatch.setattr(engine, "calculate_covariance_matrix", spy_calculate_covariance_matrix)
+
+    cli.run_backtest("configs/base.yaml", project_root=tmp_path, lookback_periods=5)
+
+    assert covariance_methods
+    assert set(covariance_methods) == {"ledoit_wolf"}
+
+
 def test_backtest_outputs_each_configured_benchmark_objective(tmp_path: Path) -> None:
     _write_project_files(tmp_path)
     config_path = tmp_path / "configs/base.yaml"
@@ -193,6 +252,53 @@ def test_backtest_outputs_each_configured_benchmark_objective(tmp_path: Path) ->
     report_html = (tmp_path / "reports/html/latest_report.html").read_text(encoding="utf-8")
     for benchmark_name in expected_benchmarks:
         assert benchmark_name in report_html
+
+
+def test_backtest_outputs_each_configured_secondary_benchmark(tmp_path: Path) -> None:
+    _write_project_files(tmp_path)
+    config_path = tmp_path / "configs/base.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            """  secondary:
+    global_60_40:
+      VT: 0.60
+      BND: 0.40
+""",
+            """  secondary:
+    global_60_40:
+      VT: 0.60
+      BND: 0.40
+    simple_global_baseline:
+      VTI: 0.50
+      BND: 0.30
+      IAU: 0.20
+""",
+        ),
+        encoding="utf-8",
+    )
+    _initialize_git_repo(tmp_path)
+    prices = _make_prices()
+    processed_dir = tmp_path / "data/processed"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    prices.to_parquet(processed_dir / "prices_validated.parquet")
+    prices.pct_change().dropna().to_parquet(processed_dir / "returns.parquet")
+
+    cli.run_backtest("configs/base.yaml", project_root=tmp_path, lookback_periods=5)
+
+    metrics_payload = json.loads(
+        (tmp_path / "reports/metrics/backtest_metrics.json").read_text(encoding="utf-8")
+    )
+    assert "60/40 Portfolio" in metrics_payload["benchmarks"]
+    assert "simple_global_baseline" in metrics_payload["benchmarks"]
+
+    workbook_metrics = pd.read_excel(
+        tmp_path / "reports/excel/portfolio_results.xlsx",
+        sheet_name="metrics",
+    )
+    assert "simple_global_baseline" in set(workbook_metrics["Strategy"])
+
+    report_html = (tmp_path / "reports/html/latest_report.html").read_text(encoding="utf-8")
+    assert "simple_global_baseline" in report_html
 
 
 def test_report_assumptions_describe_default_weight_cap() -> None:

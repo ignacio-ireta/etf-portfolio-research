@@ -128,6 +128,12 @@ def test_generate_report_bundle_creates_expected_artifacts(tmp_path) -> None:
     assert "Realized Constraint Warnings" in report_html
     assert "Synthetic dataset for smoke testing." in report_html
     assert "Past performance does not guarantee future results." in report_html
+    assert "slippage are not modeled" not in report_html
+    assert (
+        "Transaction costs and configured slippage are modeled as simple bps assumptions"
+        in report_html
+    )
+    assert report_html.count("plotly.js v") == 1
     assert "drifted outside configured caps under soft realized-constraint handling" in report_html
     workbook = pd.ExcelFile(artifacts.workbook_path)
     assert "latest_realized_portfolio" in workbook.sheet_names

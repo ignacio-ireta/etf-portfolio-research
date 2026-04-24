@@ -256,6 +256,7 @@ def summarize_backtest_metrics(
     periods_per_year: int,
     benchmark_returns: pd.Series | None = None,
     risk_free_rate: float = 0.0,
+    include_weight_metrics: bool = True,
 ) -> pd.Series:
     """Build a comprehensive performance summary for one backtest series."""
 
@@ -283,14 +284,25 @@ def summarize_backtest_metrics(
         ),
         ("Max Drawdown", float(max_drawdown(portfolio_returns))),
         ("Calmar Ratio", calmar_ratio(portfolio_returns, periods_per_year=periods_per_year)),
-        ("Turnover", turnover(weights)),
-        ("Average Number of Holdings", average_number_of_holdings(weights)),
-        ("Largest Position", largest_position(weights)),
-        ("Herfindahl Concentration Index", herfindahl_concentration_index(weights)),
-        ("Worst Month", worst_month(portfolio_returns)),
-        ("Worst Quarter", worst_quarter(portfolio_returns)),
-        ("Best Month", best_month(portfolio_returns)),
     ]
+
+    if include_weight_metrics:
+        metrics.extend(
+            [
+                ("Turnover", turnover(weights)),
+                ("Average Number of Holdings", average_number_of_holdings(weights)),
+                ("Largest Position", largest_position(weights)),
+                ("Herfindahl Concentration Index", herfindahl_concentration_index(weights)),
+            ]
+        )
+
+    metrics.extend(
+        [
+            ("Worst Month", worst_month(portfolio_returns)),
+            ("Worst Quarter", worst_quarter(portfolio_returns)),
+            ("Best Month", best_month(portfolio_returns)),
+        ]
+    )
 
     if benchmark_returns is not None:
         aligned_portfolio, aligned_benchmark = _align_series(
@@ -338,31 +350,44 @@ def compare_against_benchmarks(
     *,
     weights: pd.DataFrame,
     benchmark_returns: Mapping[str, pd.Series],
+    primary_benchmark_returns: pd.Series | None = None,
+    benchmark_weights: Mapping[str, pd.DataFrame] | None = None,
     periods_per_year: int,
     risk_free_rate: float = 0.0,
 ) -> pd.DataFrame:
     """Summarize the portfolio and multiple benchmark strategies in one table."""
 
+    selected_benchmark = (
+        primary_benchmark_returns
+        if primary_benchmark_returns is not None
+        else benchmark_returns.get("Selected Benchmark ETF")
+    )
     rows: dict[str, pd.Series] = {
         "Optimized Strategy": summarize_backtest_metrics(
             portfolio_returns,
             weights=weights,
             periods_per_year=periods_per_year,
+            benchmark_returns=selected_benchmark,
             risk_free_rate=risk_free_rate,
         )
     }
 
+    benchmark_weights = benchmark_weights or {}
     for name, benchmark_series in benchmark_returns.items():
+        supplied_weights = benchmark_weights.get(name)
         rows[name] = summarize_backtest_metrics(
             benchmark_series,
-            weights=_passive_benchmark_weights(benchmark_series, name=name),
+            weights=(
+                supplied_weights
+                if supplied_weights is not None
+                else _placeholder_benchmark_weights(benchmark_series, name=name)
+            ),
             periods_per_year=periods_per_year,
             benchmark_returns=(
-                portfolio_returns
-                if name == "Previous Optimized Strategy"
-                else benchmark_returns.get("Selected Benchmark ETF")
+                portfolio_returns if name == "Previous Optimized Strategy" else selected_benchmark
             ),
             risk_free_rate=risk_free_rate,
+            include_weight_metrics=supplied_weights is not None,
         )
 
     return pd.DataFrame(rows).T
@@ -414,7 +439,7 @@ def _aggregate_periodic_returns(returns: pd.Series, frequency: str) -> pd.Series
     return aggregated
 
 
-def _passive_benchmark_weights(
+def _placeholder_benchmark_weights(
     benchmark_series: pd.Series,
     *,
     name: str,

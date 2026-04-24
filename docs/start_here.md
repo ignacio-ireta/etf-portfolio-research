@@ -63,10 +63,13 @@ The output is research evidence, not financial advice.
 If you are new to the project, read these in order:
 
 1. [Glossary](glossary.md) for the main terms used by the project.
-2. [How To Read The Report](how_to_read_the_report.md) to understand the generated HTML output.
-3. [Interpretation Guide](interpretation_guide.md) to avoid common mistakes.
-4. [Assumptions And Limitations](assumptions_and_limitations.md) to understand what the research does not prove.
-5. [Runbook](runbook.md) when you are ready to reproduce or modify results.
+2. [Metric Dictionary](metric_dictionary.md) for exact metric meanings, formulas, interpretations, and caveats.
+3. [Trust And Safety](trust_and_safety.md) for common false conclusions and safer readings.
+4. [Guided Examples](guided_examples.md) for reproducible walkthroughs using current generated artifacts.
+5. [How To Read The Report](how_to_read_the_report.md) to understand the generated HTML output.
+6. [Interpretation Guide](interpretation_guide.md) to avoid common mistakes.
+7. [Assumptions And Limitations](assumptions_and_limitations.md) to understand what the research does not prove.
+8. [Runbook](runbook.md) when you are ready to reproduce or modify results.
 
 If you are already comfortable with portfolio research, use:
 
@@ -94,7 +97,7 @@ Open the generated report:
 reports/html/latest_report.html
 ```
 
-Then read the report alongside [How To Read The Report](how_to_read_the_report.md).
+Then read the report alongside [Guided Examples](guided_examples.md), [How To Read The Report](how_to_read_the_report.md), [Metric Dictionary](metric_dictionary.md), and [Trust And Safety](trust_and_safety.md).
 
 ## How To Think About Results
 

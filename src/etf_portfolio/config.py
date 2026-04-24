@@ -189,11 +189,25 @@ class InvestorProfileConfig(BaseModel):
 
 class OptimizationConfig(BaseModel):
     long_only: bool = True
-    max_weight_per_etf: float = Field(gt=0.0, le=1.0)
+    default_max_weight_per_etf: float = Field(gt=0.0, le=1.0)
     risk_model: RiskModel = "sample"
     expected_return_estimator: ExpectedReturnEstimator = "historical_mean"
     active_objective: OptimizationObjective
     benchmark_objectives: list[OptimizationObjective] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_max_weight(cls, value: Any) -> Any:
+        if not isinstance(value, dict) or "max_weight_per_etf" not in value:
+            return value
+        if "default_max_weight_per_etf" in value:
+            raise ValueError(
+                "Use only optimization.default_max_weight_per_etf; "
+                "optimization.max_weight_per_etf is a legacy alias.",
+            )
+        migrated = dict(value)
+        migrated["default_max_weight_per_etf"] = migrated.pop("max_weight_per_etf")
+        return migrated
 
     @field_validator("benchmark_objectives")
     @classmethod
@@ -213,6 +227,10 @@ class OptimizationConfig(BaseModel):
                 "optimization.benchmark_objectives.",
             )
         return self
+
+    @property
+    def max_weight_per_etf(self) -> float:
+        return self.default_max_weight_per_etf
 
 
 class AllocationBoundConfig(BaseModel):
@@ -473,10 +491,20 @@ class AppConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_feasibility(self) -> AppConfig:
-        max_capacity = len(self.universe.tickers) * self.optimization.max_weight_per_etf
+        default_max_weight = self.optimization.default_max_weight_per_etf
+        ticker_bounds = {
+            ticker.upper(): bounds for ticker, bounds in self.constraints.ticker_bounds.items()
+        }
+        max_capacity = sum(
+            ticker_bounds.get(ticker.upper()).max
+            if ticker.upper() in ticker_bounds
+            else default_max_weight
+            for ticker in self.universe.tickers
+        )
         if max_capacity + 1e-8 < 1.0:
             raise ValueError(
-                "optimization.max_weight_per_etf is infeasible for the configured universe size.",
+                "optimization.default_max_weight_per_etf and constraints.ticker_bounds "
+                "are infeasible for the configured universe size.",
             )
         return self
 

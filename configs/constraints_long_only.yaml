@@ -1,6 +1,6 @@
 optimization:
   long_only: true
-  max_weight_per_etf: 0.25
+  default_max_weight_per_etf: 0.25
 
 constraints:
   asset_class_bounds:

@@ -12,16 +12,41 @@ The report is generated from pipeline outputs. It is not manually edited and doe
 
 Read the report in this order:
 
-1. ETF universe and data coverage.
-2. Latest realized portfolio and optimizer target portfolio.
-3. Exposure tables by asset class and region.
-4. Benchmark comparison and performance metrics.
-5. Drawdown and rolling risk charts.
-6. Stress periods.
-7. Return and risk attribution.
-8. Assumptions, limitations, and warnings.
+1. Reader guide and trust-and-safety warnings.
+2. ETF universe and data coverage.
+3. Metric dictionary.
+4. Latest realized portfolio and optimizer target portfolio.
+5. Exposure tables by asset class and region.
+6. Benchmark comparison and performance metrics.
+7. Drawdown and rolling risk charts.
+8. Stress periods.
+9. Return and risk attribution.
+10. Assumptions, limitations, and warnings.
 
-This order starts with what data was used, then what portfolio was built, then how it behaved historically.
+This order starts with what the report can and cannot prove, then what data was used, what portfolio was built, and how it behaved historically.
+
+## Trust And Safety
+
+The report includes the same common false conclusions as [Trust And Safety](trust_and_safety.md). Read this section before interpreting the metrics.
+
+The main warnings are:
+
+- a high Sharpe ratio does not guarantee future returns
+- a backtest can overfit
+- historical mean returns are fragile
+- ETF expense ratios matter, but they are not the only cost
+- contribution-only portfolios can drift away from optimizer targets
+
+## Metric Dictionary
+
+The report includes the same metric dictionary as [Metric Dictionary](metric_dictionary.md). Use it when a table or chart includes a metric you do not recognize.
+
+The dictionary is the canonical reference for:
+
+- plain-English meaning
+- formula-level summary
+- good/bad interpretation
+- caveats
 
 ## ETF Universe Summary
 

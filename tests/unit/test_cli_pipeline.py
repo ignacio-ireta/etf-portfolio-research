@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -31,6 +32,7 @@ def test_cli_pipeline_stages_create_expected_artifacts(
     monkeypatch,
 ) -> None:
     _write_project_files(tmp_path)
+    _initialize_git_repo(tmp_path)
     prices = _make_prices()
 
     monkeypatch.chdir(tmp_path)
@@ -69,31 +71,67 @@ def test_cli_pipeline_stages_create_expected_artifacts(
     metrics_payload = json.loads(backtest_metrics_text)
     assert metrics_payload["run_id"].startswith("backtest-")
     assert Path(metrics_payload["run_record"]).exists()
+    assert not Path(metrics_payload["run_record"]).is_absolute()
+    run_record = json.loads((tmp_path / metrics_payload["run_record"]).read_text(encoding="utf-8"))
+    assert run_record["git_commit_hash"]
+    assert len(run_record["git_commit_hash"]) == 40
+    assert run_record["data_version"]["path"] == "data/processed/returns.parquet"
+    assert not Path(run_record["data_version"]["path"]).is_absolute()
+    for artifact in run_record["output_artifacts"].values():
+        artifact_path = Path(artifact["path"])
+        assert not artifact_path.is_absolute()
+        assert (tmp_path / artifact_path).exists()
     assert "optimized_strategy" in metrics_payload
     assert "benchmarks" in metrics_payload
     assert "Selected Benchmark ETF" in metrics_payload["benchmarks"]
-    assert "Equal-Weight ETF Universe" in metrics_payload["benchmarks"]
     assert "60/40 Portfolio" in metrics_payload["benchmarks"]
     assert "Inverse-Volatility Portfolio" in metrics_payload["benchmarks"]
+    assert "Minimum-Variance Portfolio" in metrics_payload["benchmarks"]
+    assert "Risk-Parity Portfolio" in metrics_payload["benchmarks"]
     assert "Previous Optimized Strategy" in metrics_payload["benchmarks"]
     assert any((tmp_path / "reports/figures").glob("*.png"))
+    workbook_metrics = pd.read_excel(
+        tmp_path / "reports/excel/portfolio_results.xlsx",
+        sheet_name="metrics",
+    )
+    optimized_report_row = workbook_metrics.loc[
+        workbook_metrics["Strategy"] == "Optimized Strategy"
+    ].iloc[0]
+    for metric in ["Alpha", "Beta", "Tracking Error", "Information Ratio"]:
+        assert metric in metrics_payload["optimized_strategy"]
+        assert metrics_payload["optimized_strategy"][metric] == pytest.approx(
+            optimized_report_row[metric]
+        )
 
     latest_report_html = (tmp_path / "reports/html/latest_report.html").read_text(encoding="utf-8")
     assert "ETF Universe Summary" in latest_report_html
     assert "Portfolio Weights" in latest_report_html
     assert "Assumptions and Limitations" in latest_report_html
+    assert "Default maximum ETF weight: 50.00%" in latest_report_html
+    assert "Maximum ETF weight: 50.00%" not in latest_report_html
 
     ml_metrics_text = (tmp_path / "reports/ml/metrics.json").read_text(encoding="utf-8")
     assert "NaN" not in ml_metrics_text
     ml_metrics_payload = json.loads(ml_metrics_text)
     assert ml_metrics_payload["run_id"].startswith("ml-")
     assert Path(ml_metrics_payload["run_record"]).exists()
+    assert not Path(ml_metrics_payload["run_record"]).is_absolute()
+    ml_run_record = json.loads(
+        (tmp_path / ml_metrics_payload["run_record"]).read_text(encoding="utf-8")
+    )
+    assert ml_run_record["git_commit_hash"]
+    assert len(ml_run_record["git_commit_hash"]) == 40
+    for artifact in ml_run_record["output_artifacts"].values():
+        artifact_path = Path(artifact["path"])
+        assert not artifact_path.is_absolute()
+        assert (tmp_path / artifact_path).exists()
     assert ml_metrics_payload["governance"]["approval_status"] in {"eligible", "research_only"}
     assert "passes_leakage_checks" in ml_metrics_payload["governance"]["checks"]
 
 
 def test_run_all_executes_reproducible_cli_pipeline(tmp_path: Path, monkeypatch) -> None:
     _write_project_files(tmp_path)
+    _initialize_git_repo(tmp_path)
     prices = _make_prices()
 
     monkeypatch.chdir(tmp_path)
@@ -107,6 +145,65 @@ def test_run_all_executes_reproducible_cli_pipeline(tmp_path: Path, monkeypatch)
     assert (tmp_path / "reports/excel/optimized_portfolios.xlsx").exists()
     assert (tmp_path / "reports/html/latest_report.html").exists()
     assert (tmp_path / "reports/metrics/backtest_metrics.json").exists()
+
+
+def test_backtest_outputs_each_configured_benchmark_objective(tmp_path: Path) -> None:
+    _write_project_files(tmp_path)
+    config_path = tmp_path / "configs/base.yaml"
+    config_text = config_path.read_text(encoding="utf-8")
+    config_text = config_text.replace(
+        "active_objective: equal_weight",
+        "active_objective: max_sharpe",
+    )
+    config_text = config_text.replace(
+        """  benchmark_objectives:
+    - inverse_volatility
+    - min_variance
+    - risk_parity
+""",
+        """  benchmark_objectives:
+    - equal_weight
+    - inverse_volatility
+    - min_variance
+    - risk_parity
+""",
+    )
+    config_path.write_text(config_text, encoding="utf-8")
+    _initialize_git_repo(tmp_path)
+
+    prices = _make_prices()
+    processed_dir = tmp_path / "data/processed"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    prices.to_parquet(processed_dir / "prices_validated.parquet")
+    prices.pct_change().dropna().to_parquet(processed_dir / "returns.parquet")
+
+    cli.run_backtest("configs/base.yaml", project_root=tmp_path, lookback_periods=5)
+
+    expected_benchmarks = {
+        "Equal-Weight ETF Universe",
+        "Inverse-Volatility Portfolio",
+        "Minimum-Variance Portfolio",
+        "Risk-Parity Portfolio",
+    }
+    metrics_payload = json.loads(
+        (tmp_path / "reports/metrics/backtest_metrics.json").read_text(encoding="utf-8")
+    )
+    assert expected_benchmarks.issubset(metrics_payload["benchmarks"])
+
+    report_html = (tmp_path / "reports/html/latest_report.html").read_text(encoding="utf-8")
+    for benchmark_name in expected_benchmarks:
+        assert benchmark_name in report_html
+
+
+def test_report_assumptions_describe_default_weight_cap() -> None:
+    config = load_config("configs/base.yaml")
+    assumptions = cli._report_assumptions(config, "max_sharpe")
+
+    assert config.constraints.ticker_bounds["VTI"].max == 0.60
+    assert assumptions["weight_cap"] == (
+        "Default maximum ETF weight: 25.00%; ticker-specific bounds may override this default."
+    )
+    assert assumptions["weight_cap"] != "Maximum ETF weight: 25.00%"
 
 
 def _write_project_files(project_root: Path) -> None:
@@ -140,7 +237,7 @@ investor_profile:
   tax_preference: minimize_realized_gains
 optimization:
   long_only: true
-  max_weight_per_etf: 0.5
+  default_max_weight_per_etf: 0.5
   risk_model: sample
   expected_return_estimator: historical_mean
   active_objective: equal_weight
@@ -231,6 +328,31 @@ ml:
             ]
         ),
         encoding="utf-8",
+    )
+
+
+def _initialize_git_repo(project_root: Path) -> None:
+    subprocess.run(["git", "init"], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "tests@example.com"],
+        cwd=project_root,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test Runner"],
+        cwd=project_root,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "add", "configs/base.yaml", "data/metadata/etf_universe.csv"],
+        cwd=project_root,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "Initial project files"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
     )
 
 
@@ -440,7 +562,7 @@ investor_profile:
   tax_preference: minimize_realized_gains
 optimization:
   long_only: true
-  max_weight_per_etf: 0.8
+  default_max_weight_per_etf: 0.8
   risk_model: sample
   expected_return_estimator: historical_mean
   active_objective: max_sharpe

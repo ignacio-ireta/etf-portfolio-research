@@ -13,12 +13,14 @@ INCLUDE_EXACT_FILES = (
     Path(".github/workflows/ci.yml"),
     Path("data/metadata/etf_universe.csv"),
     Path("reports/metrics/backtest_metrics.json"),
+    Path("reports/html/latest_report.html"),
     Path("reports/excel/portfolio_results.xlsx"),
     Path("reports/excel/optimized_portfolios.xlsx"),
 )
 
 INCLUDE_GLOBS = (
     "handoff/*.txt",
+    "reports/figures/*.png",
     "reports/runs/*.json",
 )
 
@@ -51,6 +53,10 @@ SECRET_PATH_HINTS = (
 
 MAX_HTML_BYTES = 1_000_000
 
+HTML_SIZE_ALLOWLIST = {
+    Path("reports/html/latest_report.html"),
+}
+
 
 def _as_posix(path: Path) -> str:
     return path.as_posix()
@@ -72,7 +78,11 @@ def _is_excluded(path: Path) -> bool:
     if any(hint in lower_posix_path for hint in SECRET_PATH_HINTS):
         return True
 
-    if path.suffix.lower() in {".html", ".htm"} and path.exists():
+    if (
+        path.suffix.lower() in {".html", ".htm"}
+        and path.exists()
+        and path not in HTML_SIZE_ALLOWLIST
+    ):
         return path.stat().st_size > MAX_HTML_BYTES
 
     if file_name in {"secrets", "secrets.txt", "secrets.json"}:

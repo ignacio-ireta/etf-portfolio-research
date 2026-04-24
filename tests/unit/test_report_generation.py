@@ -111,6 +111,12 @@ def test_generate_report_bundle_creates_expected_artifacts(tmp_path) -> None:
     assert "Reader Guide" in report_html
     assert "Research-tool warning" in report_html
     assert "This report is for research and education only." in report_html
+    assert "Trust And Safety" in report_html
+    assert "A high Sharpe ratio guarantees strong future returns." in report_html
+    assert "Contribution-only portfolios always match optimizer targets." in report_html
+    assert "Metric Dictionary" in report_html
+    assert "Formula-Level Summary" in report_html
+    assert "Sharpe Ratio" in report_html
     assert "How to read this section" in report_html
     assert "What this shows" in report_html
     assert "ETF Universe Summary" in report_html
@@ -126,6 +132,8 @@ def test_generate_report_bundle_creates_expected_artifacts(tmp_path) -> None:
     workbook = pd.ExcelFile(artifacts.workbook_path)
     assert "latest_realized_portfolio" in workbook.sheet_names
     assert "optimizer_target_portfolio" in workbook.sheet_names
+    assert "trust_and_safety" in workbook.sheet_names
+    assert "metric_dictionary" in workbook.sheet_names
     assert "optimized_portfolio" not in workbook.sheet_names
     assert "realized_constraint_warnings" in workbook.sheet_names
 

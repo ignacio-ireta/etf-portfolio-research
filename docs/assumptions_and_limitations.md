@@ -14,6 +14,8 @@ Use this project to:
 
 Do not use this project as the sole basis for financial, tax, legal, or retirement decisions.
 
+For a short list of common false conclusions to avoid, read [Trust And Safety](trust_and_safety.md). The same guidance is included in generated reports.
+
 ## Data Assumptions
 
 The default price provider is `yfinance`, which is suitable for research and prototyping but not production-grade market data.

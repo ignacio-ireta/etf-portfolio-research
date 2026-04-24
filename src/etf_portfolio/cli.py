@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -12,8 +13,7 @@ import pandas as pd
 from plotly.io import write_html
 
 from etf_portfolio.backtesting.engine import run_walk_forward_backtest
-from etf_portfolio.backtesting.metrics import summarize_backtest_metrics
-from etf_portfolio.config import AppConfig, load_config
+from etf_portfolio.config import AppConfig, OptimizationObjective, load_config
 from etf_portfolio.data.ingest import ingest_price_data, load_etf_universe_metadata
 from etf_portfolio.data.providers import (
     PriceDataProvider,
@@ -45,11 +45,22 @@ from etf_portfolio.optimization.optimizer import OptimizationMethod, optimize_po
 from etf_portfolio.reporting.plots import build_efficient_frontier_figure
 from etf_portfolio.reporting.report import generate_report_bundle
 from etf_portfolio.reporting.tables import build_metrics_table
-from etf_portfolio.tracking import build_run_record, generate_run_id, write_run_record
+from etf_portfolio.tracking import (
+    build_run_record,
+    generate_run_id,
+    relative_to_project_root,
+    write_run_record,
+)
 
 DEFAULT_LOOKBACK_PERIODS = 756
 LOGGER = get_logger(__name__)
 FIXED_INCOME_ASSET_CLASS = "fixed_income"
+
+
+@dataclass(frozen=True)
+class BenchmarkSuiteArtifacts:
+    returns: dict[str, pd.Series]
+    weights: dict[str, pd.DataFrame]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -317,7 +328,7 @@ def run_optimize(
         expected_returns,
         covariance_matrix,
         method=method,
-        max_weight=config.optimization.max_weight_per_etf,
+        max_weight=config.optimization.default_max_weight_per_etf,
         risk_free_rate=get_risk_free_rate(config),
         **optimization_constraints,
     )
@@ -339,7 +350,7 @@ def run_optimize(
             expected_returns,
             covariance_matrix,
             portfolio_weights=weights,
-            max_weight=config.optimization.max_weight_per_etf,
+            max_weight=config.optimization.default_max_weight_per_etf,
             risk_free_rate=get_risk_free_rate(config),
             **optimization_constraints,
         ),
@@ -440,7 +451,7 @@ def run_backtest(
         rebalance_dates=rebalance_dates,
         lookback_periods=effective_lookback,
         optimization_method=method,
-        max_weight=config.optimization.max_weight_per_etf,
+        max_weight=config.optimization.default_max_weight_per_etf,
         transaction_cost_rate=_transaction_cost_rate(config),
         asset_classes=asset_class_map,
         asset_class_bounds=asset_class_bounds,
@@ -469,7 +480,7 @@ def run_backtest(
         in_sample_returns,
         method=config.optimization.risk_model,
     )
-    benchmark_suite = _build_benchmark_suite(
+    benchmark_artifacts = _build_benchmark_suite(
         returns,
         asset_returns,
         config=config,
@@ -484,6 +495,7 @@ def run_backtest(
         expense_ratios=expense_ratio_map,
         risk_free_rate=risk_free_rate,
     )
+    benchmark_suite = benchmark_artifacts.returns
     aligned_benchmark_suite = {
         name: series.reindex(aligned_portfolio.index).dropna()
         for name, series in benchmark_suite.items()
@@ -514,9 +526,10 @@ def run_backtest(
         primary_benchmark_returns=primary_benchmark,
         periods_per_year=252,
         risk_free_rate=risk_free_rate,
-        max_weight=config.optimization.max_weight_per_etf,
+        max_weight=config.optimization.default_max_weight_per_etf,
         title=f"{config.project.name} Backtest Report",
         benchmark_suite=aligned_benchmark_suite,
+        benchmark_weights=benchmark_artifacts.weights,
         metadata=metadata.reindex(backtest_result.weights.columns),
         prices=(
             validated_prices.reindex(columns=backtest_result.weights.columns)
@@ -540,26 +553,25 @@ def run_backtest(
     )
 
     metrics_path = project_root / "reports/metrics/backtest_metrics.json"
-    strategy_metrics = summarize_backtest_metrics(
+    metrics_table = build_metrics_table(
         aligned_portfolio,
         weights=backtest_result.weights,
         periods_per_year=252,
         benchmark_returns=primary_benchmark,
+        benchmark_suite=aligned_benchmark_suite,
+        benchmark_weights=benchmark_artifacts.weights,
         risk_free_rate=risk_free_rate,
     )
+    metrics_by_strategy = {
+        str(row["Strategy"]): {key: value for key, value in row.items() if key != "Strategy"}
+        for row in metrics_table.to_dict(orient="records")
+    }
+    strategy_metrics_payload = metrics_by_strategy.pop("Optimized Strategy")
+    strategy_metrics = pd.Series(strategy_metrics_payload, dtype=float)
     metrics_payload: dict[str, Any] = {
         "run_id": stage_run_id,
-        "optimized_strategy": strategy_metrics.round(6).to_dict(),
-        "benchmarks": {
-            row["Strategy"]: {key: value for key, value in row.items() if key != "Strategy"}
-            for row in build_metrics_table(
-                aligned_portfolio,
-                weights=backtest_result.weights,
-                periods_per_year=252,
-                benchmark_suite=aligned_benchmark_suite,
-                risk_free_rate=risk_free_rate,
-            ).to_dict(orient="records")
-        },
+        "optimized_strategy": strategy_metrics_payload,
+        "benchmarks": metrics_by_strategy,
     }
     if persist_metrics:
         metrics_path.parent.mkdir(parents=True, exist_ok=True)
@@ -585,7 +597,7 @@ def run_backtest(
             run_record,
             artifact_dir=project_root / config.tracking.artifact_dir,
         )
-        metrics_payload["run_record"] = str(run_record_path)
+        metrics_payload["run_record"] = relative_to_project_root(project_root, run_record_path)
         write_metrics_json(metrics_payload, metrics_path)
     if float(strategy_metrics["Turnover"]) > 1.0:
         log_event(
@@ -836,7 +848,7 @@ def run_ml(
             "leakage_checks": leakage_checks,
             "model_version": governance["model_version"],
             "approval_status": governance["approval_status"],
-            "model_card": str(model_card_path),
+            "model_card": relative_to_project_root(project_root, model_card_path),
         },
     )
     run_record_path = write_run_record(
@@ -859,11 +871,11 @@ def run_ml(
         },
         tags={
             "approval_status": governance["approval_status"],
-            "run_record": str(run_record_path),
+            "run_record": relative_to_project_root(project_root, run_record_path),
         },
     )
     metrics_payload["mlflow"] = mlflow_status
-    metrics_payload["run_record"] = str(run_record_path)
+    metrics_payload["run_record"] = relative_to_project_root(project_root, run_record_path)
     write_metrics_json(metrics_payload, metrics_path)
     log_event(
         LOGGER,
@@ -994,7 +1006,11 @@ def _report_assumptions(config: AppConfig, optimization_method: str) -> dict[str
             f"{config.costs.transaction_cost_bps:.2f} bps fees + "
             f"{config.costs.slippage_bps:.2f} bps slippage"
         ),
-        "weight_cap": (f"Maximum ETF weight: {config.optimization.max_weight_per_etf:.2%}"),
+        "weight_cap": (
+            "Default maximum ETF weight: "
+            f"{config.optimization.default_max_weight_per_etf:.2%}; "
+            "ticker-specific bounds may override this default."
+        ),
         "risk_free_rate": (
             f"Annualized risk-free rate ({config.risk_free.source}): {config.risk_free.value:.2%}"
         ),
@@ -1072,35 +1088,50 @@ def _build_benchmark_suite(
     min_bond_exposure: float | None = None,
     expense_ratios: pd.Series | None = None,
     risk_free_rate: float = 0.0,
-) -> dict[str, pd.Series]:
-    suite: dict[str, pd.Series] = {"Selected Benchmark ETF": _benchmark_returns(returns, config)}
-    suite["Equal-Weight ETF Universe"] = asset_returns.mean(axis=1)
+) -> BenchmarkSuiteArtifacts:
+    selected_benchmark_returns = _benchmark_returns(returns, config)
+    suite: dict[str, pd.Series] = {"Selected Benchmark ETF": selected_benchmark_returns}
+    benchmark_weights: dict[str, pd.DataFrame] = {
+        "Selected Benchmark ETF": _constant_benchmark_weights(
+            selected_benchmark_returns.index,
+            {config.benchmark.primary: 1.0},
+        )
+    }
     if "global_60_40" in config.benchmark.secondary:
+        allocations = config.benchmark.secondary["global_60_40"].allocations
         suite["60/40 Portfolio"] = _composite_benchmark_returns(
             returns,
-            config.benchmark.secondary["global_60_40"].allocations,
+            allocations,
         )
-    suite["Inverse-Volatility Portfolio"] = run_walk_forward_backtest(
-        asset_returns,
-        rebalance_dates=rebalance_dates,
-        lookback_periods=lookback_periods,
-        optimization_method="inverse_volatility",
-        max_weight=config.optimization.max_weight_per_etf,
-        transaction_cost_rate=transaction_cost_rate,
-        asset_classes=asset_classes,
-        asset_class_bounds=asset_class_bounds,
-        ticker_bounds=ticker_bounds,
-        bond_assets=bond_assets,
-        min_bond_exposure=min_bond_exposure,
-        expense_ratios=expense_ratios,
-        risk_free_rate=risk_free_rate,
-    ).portfolio_returns
-    suite["Previous Optimized Strategy"] = run_walk_forward_backtest(
+        benchmark_weights["60/40 Portfolio"] = _constant_benchmark_weights(
+            suite["60/40 Portfolio"].index,
+            allocations,
+        )
+    for objective in config.optimization.benchmark_objectives:
+        benchmark_result = run_walk_forward_backtest(
+            asset_returns,
+            rebalance_dates=rebalance_dates,
+            lookback_periods=lookback_periods,
+            optimization_method=_optimization_method_for_objective(objective),
+            max_weight=config.optimization.default_max_weight_per_etf,
+            transaction_cost_rate=transaction_cost_rate,
+            asset_classes=asset_classes,
+            asset_class_bounds=asset_class_bounds,
+            ticker_bounds=ticker_bounds,
+            bond_assets=bond_assets,
+            min_bond_exposure=min_bond_exposure,
+            expense_ratios=expense_ratios,
+            risk_free_rate=risk_free_rate,
+        )
+        label = _benchmark_objective_label(objective)
+        suite[label] = benchmark_result.portfolio_returns
+        benchmark_weights[label] = benchmark_result.weights
+    previous_result = run_walk_forward_backtest(
         asset_returns,
         rebalance_dates=rebalance_dates,
         lookback_periods=lookback_periods,
         optimization_method=_select_optimization_method(config),
-        max_weight=config.optimization.max_weight_per_etf,
+        max_weight=config.optimization.default_max_weight_per_etf,
         transaction_cost_rate=transaction_cost_rate,
         asset_classes=asset_classes,
         asset_class_bounds=asset_class_bounds,
@@ -1110,8 +1141,32 @@ def _build_benchmark_suite(
         expense_ratios=expense_ratios,
         risk_free_rate=risk_free_rate,
         apply_previous_weights_lag=True,
-    ).portfolio_returns
-    return suite
+    )
+    suite["Previous Optimized Strategy"] = previous_result.portfolio_returns
+    benchmark_weights["Previous Optimized Strategy"] = previous_result.weights
+    return BenchmarkSuiteArtifacts(returns=suite, weights=benchmark_weights)
+
+
+def _benchmark_objective_label(objective: OptimizationObjective) -> str:
+    labels: dict[OptimizationObjective, str] = {
+        "equal_weight": "Equal-Weight ETF Universe",
+        "inverse_volatility": "Inverse-Volatility Portfolio",
+        "min_variance": "Minimum-Variance Portfolio",
+        "max_sharpe": "Max-Sharpe Portfolio",
+        "risk_parity": "Risk-Parity Portfolio",
+    }
+    return labels[objective]
+
+
+def _optimization_method_for_objective(objective: OptimizationObjective) -> OptimizationMethod:
+    method_map: dict[OptimizationObjective, OptimizationMethod] = {
+        "equal_weight": "equal_weight",
+        "inverse_volatility": "inverse_volatility",
+        "min_variance": "min_volatility",
+        "max_sharpe": "max_sharpe",
+        "risk_parity": "risk_parity",
+    }
+    return method_map[objective]
 
 
 def _composite_benchmark_returns(
@@ -1121,6 +1176,18 @@ def _composite_benchmark_returns(
     available = returns.loc[:, list(allocations)]
     weights = pd.Series(allocations, dtype=float)
     return available.mul(weights, axis=1).sum(axis=1)
+
+
+def _constant_benchmark_weights(
+    index: pd.Index,
+    allocations: dict[str, float],
+) -> pd.DataFrame:
+    weight_index = pd.Index([index.min(), index.max()], name="rebalance_date").unique()
+    return pd.DataFrame(
+        [allocations for _ in range(len(weight_index))],
+        index=weight_index,
+        dtype=float,
+    )
 
 
 def _asset_class_bounds(

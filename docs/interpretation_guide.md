@@ -41,6 +41,8 @@ A strategy can look sophisticated and still be fragile.
 
 ## Common Mistakes
 
+Canonical false-conclusion guidance lives in [Trust And Safety](trust_and_safety.md) and is included directly in generated reports.
+
 **Mistake: Treating historical return as expected future return**
 
 Historical return is evidence, not a promise. Markets change.

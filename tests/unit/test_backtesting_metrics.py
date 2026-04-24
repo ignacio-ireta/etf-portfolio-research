@@ -15,6 +15,7 @@ from etf_portfolio.backtesting.metrics import (
     calculate_portfolio_volatility,
     calculate_sharpe_ratio,
     calmar_ratio,
+    compare_against_benchmarks,
     herfindahl_concentration_index,
     information_ratio,
     largest_position,
@@ -213,3 +214,53 @@ def test_summarize_backtest_metrics_includes_benchmark_relative_and_holdings_sta
     assert summary["Largest Position"] == pytest.approx(0.60)
     assert summary["Alpha"] == pytest.approx(0.016974757266420795)
     assert summary["Tracking Error"] == pytest.approx(0.004774934554525328)
+
+
+def test_compare_against_benchmarks_adds_relative_metrics_to_optimized_row() -> None:
+    table = compare_against_benchmarks(
+        make_portfolio_returns(),
+        weights=make_weight_history(),
+        benchmark_returns={"Selected Benchmark ETF": make_benchmark_returns()},
+        primary_benchmark_returns=make_benchmark_returns(),
+        periods_per_year=12,
+        risk_free_rate=0.02,
+    )
+
+    optimized = table.loc["Optimized Strategy"]
+    assert optimized["Beta"] == pytest.approx(1.0497688332880066)
+    assert optimized["Alpha"] == pytest.approx(0.016974757266420795)
+    assert optimized["Tracking Error"] == pytest.approx(0.004774934554525328)
+    assert optimized["Information Ratio"] == pytest.approx(3.76968517462526)
+
+
+def test_compare_against_benchmarks_suppresses_weight_metrics_without_weights() -> None:
+    table = compare_against_benchmarks(
+        make_portfolio_returns(),
+        weights=make_weight_history(),
+        benchmark_returns={"Synthetic Benchmark": make_benchmark_returns()},
+        primary_benchmark_returns=make_benchmark_returns(),
+        periods_per_year=12,
+    )
+
+    synthetic = table.loc["Synthetic Benchmark"]
+    assert pd.isna(synthetic["Turnover"])
+    assert pd.isna(synthetic["Average Number of Holdings"])
+    assert pd.isna(synthetic["Largest Position"])
+    assert pd.isna(synthetic["Herfindahl Concentration Index"])
+
+
+def test_compare_against_benchmarks_keeps_weight_metrics_with_supplied_weights() -> None:
+    table = compare_against_benchmarks(
+        make_portfolio_returns(),
+        weights=make_weight_history(),
+        benchmark_returns={"Weighted Benchmark": make_benchmark_returns()},
+        benchmark_weights={"Weighted Benchmark": make_weight_history()},
+        primary_benchmark_returns=make_benchmark_returns(),
+        periods_per_year=12,
+    )
+
+    weighted = table.loc["Weighted Benchmark"]
+    assert weighted["Turnover"] == pytest.approx(0.10)
+    assert weighted["Average Number of Holdings"] == pytest.approx(2.0)
+    assert weighted["Largest Position"] == pytest.approx(0.60)
+    assert weighted["Herfindahl Concentration Index"] == pytest.approx(0.5083333333333334)

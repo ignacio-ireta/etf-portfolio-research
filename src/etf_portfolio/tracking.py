@@ -36,6 +36,13 @@ def build_run_record(
 ) -> dict[str, Any]:
     """Build a normalized run record for any research stage."""
 
+    git_commit_hash = current_git_commit_hash(project_root)
+    if git_commit_hash is None:
+        raise RuntimeError(
+            "Run records require a real git commit. Run from a git repository with at least "
+            "one commit before generating tracked artifacts."
+        )
+
     output_manifest = {
         name: _artifact_record(project_root, Path(path)) for name, path in output_artifacts.items()
     }
@@ -43,7 +50,7 @@ def build_run_record(
         "run_id": run_id,
         "stage": stage,
         "timestamp_utc": datetime.now(UTC).isoformat(),
-        "git_commit_hash": current_git_commit_hash(project_root),
+        "git_commit_hash": git_commit_hash,
         "config_hash": config_hash(config),
         "data_version": (
             _artifact_record(project_root, data_version_path)
@@ -113,11 +120,23 @@ def file_sha256(path: Path) -> str | None:
 
 def _artifact_record(project_root: Path, path: Path) -> dict[str, Any]:
     resolved_path = path if path.is_absolute() else project_root / path
+    artifact_path = relative_to_project_root(project_root, resolved_path)
     return {
-        "path": str(resolved_path),
+        "path": artifact_path,
         "exists": resolved_path.exists(),
         "sha256": file_sha256(resolved_path),
     }
+
+
+def relative_to_project_root(project_root: Path, path: Path) -> str:
+    """Return a portable project-relative artifact path."""
+
+    resolved_root = project_root.resolve()
+    resolved_path = path.resolve()
+    try:
+        return resolved_path.relative_to(resolved_root).as_posix()
+    except ValueError as exc:
+        raise ValueError(f"Artifact path must be inside project_root: {resolved_path}") from exc
 
 
 __all__ = [
@@ -126,6 +145,7 @@ __all__ = [
     "current_git_commit_hash",
     "file_sha256",
     "generate_run_id",
+    "relative_to_project_root",
     "universe_id",
     "write_run_record",
 ]

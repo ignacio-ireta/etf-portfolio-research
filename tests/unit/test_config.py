@@ -36,6 +36,7 @@ def test_load_config_reads_revised_base_yaml() -> None:
     assert config.benchmark.primary == "VT"
     assert config.benchmark.secondary["global_60_40"].allocations == {"VT": 0.6, "BND": 0.4}
     assert config.optimization.active_objective == "max_sharpe"
+    assert config.optimization.default_max_weight_per_etf == 0.25
     assert config.optimization.benchmark_objectives == [
         "equal_weight",
         "inverse_volatility",
@@ -93,7 +94,7 @@ investor_profile:
   tax_preference: minimize_realized_gains
 optimization:
   long_only: true
-  max_weight_per_etf: 0.25
+  default_max_weight_per_etf: 0.25
   active_objective: max_sharpe
   benchmark_objectives:
     - equal_weight
@@ -137,9 +138,12 @@ benchmark:
       VTI: 0.55
       BND: 0.45
 optimization:
-  max_weight_per_etf: 0.2
+  default_max_weight_per_etf: 0.2
 constraints:
   ticker_bounds:
+    VTI:
+      min: 0.00
+      max: 0.30
     IAU:
       min: 0.00
       max: 0.10
@@ -160,10 +164,11 @@ ml:
         "VTI": 0.55,
         "BND": 0.45,
     }
-    assert config.optimization.max_weight_per_etf == 0.2
+    assert config.optimization.default_max_weight_per_etf == 0.2
     assert config.optimization.active_objective == "max_sharpe"
     assert config.optimization.benchmark_objectives == ["equal_weight"]
     assert config.constraints.asset_class_bounds["fixed_income"].max == 0.5
+    assert config.constraints.ticker_bounds["VTI"].max == 0.30
     assert config.constraints.ticker_bounds["IAU"].max == 0.10
     assert config.rebalance.fallback_sell_allowed is False
     assert config.rebalance.fallback is None
@@ -195,7 +200,7 @@ investor_profile:
   tax_preference: minimize_realized_gains
 optimization:
   long_only: true
-  max_weight_per_etf: 0.25
+  default_max_weight_per_etf: 0.25
   active_objective: equal_weight
   benchmark_objectives:
     - min_variance
@@ -224,9 +229,76 @@ ml:
 
     with pytest.raises(
         ValueError,
-        match="optimization.max_weight_per_etf is infeasible for the configured universe size",
+        match=(
+            "optimization.default_max_weight_per_etf and constraints.ticker_bounds "
+            "are infeasible for the configured universe size"
+        ),
     ):
         load_config(config_path)
+
+
+def test_load_config_uses_ticker_bounds_for_default_cap_feasibility(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "valid_with_ticker_override.yaml"
+    config_path.write_text(
+        """
+project:
+  name: etf_portfolio_research
+  base_currency: USD
+universe:
+  tickers:
+    - VTI
+    - BND
+    - TIP
+benchmark:
+  primary: VT
+data:
+  provider: yfinance
+  start_date: "2011-01-01"
+  end_date: null
+  price_field: adjusted_close
+investor_profile:
+  horizon_years: 35
+  objective: long_term_accumulation
+  tax_preference: minimize_realized_gains
+optimization:
+  long_only: true
+  default_max_weight_per_etf: 0.25
+  active_objective: equal_weight
+  benchmark_objectives:
+    - min_variance
+constraints:
+  asset_class_bounds: {}
+  ticker_bounds:
+    VTI:
+      min: 0.00
+      max: 0.60
+rebalance:
+  mode: contribution_only
+  frequency: monthly
+  fallback_sell_allowed: false
+  fallback:
+    sell_allowed_if_absolute_drift_exceeds: 0.10
+  contribution_amount: 100.0
+costs:
+  transaction_cost_bps: 2
+  slippage_bps: 1
+ml:
+  enabled: true
+  task: regression
+  target: forward_return
+  horizon_periods: 21
+  models:
+    - historical_mean
+""".strip(),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.optimization.default_max_weight_per_etf == 0.25
+    assert config.constraints.ticker_bounds["VTI"].max == 0.60
 
 
 def test_load_config_rejects_invalid_benchmark_mix_weights(tmp_path: Path) -> None:
@@ -259,7 +331,7 @@ investor_profile:
   tax_preference: minimize_realized_gains
 optimization:
   long_only: true
-  max_weight_per_etf: 0.25
+  default_max_weight_per_etf: 0.25
   active_objective: equal_weight
   benchmark_objectives:
     - min_variance
@@ -303,6 +375,8 @@ def test_config_to_dict_round_trips_revised_benchmark_and_rebalance() -> None:
     assert payload["rebalance"]["realized_constraint_policy"] == "report_drift"
     assert payload["tracking"]["artifact_dir"] == "reports/runs"
     assert payload["optimization"]["active_objective"] == "max_sharpe"
+    assert payload["optimization"]["default_max_weight_per_etf"] == 0.25
+    assert "max_weight_per_etf" not in payload["optimization"]
     assert payload["optimization"]["benchmark_objectives"] == [
         "equal_weight",
         "inverse_volatility",
@@ -339,7 +413,7 @@ investor_profile:
   tax_preference: minimize_realized_gains
 optimization:
   long_only: true
-  max_weight_per_etf: 0.25
+  default_max_weight_per_etf: 0.25
   active_objective: equal_weight
   benchmark_objectives:
     - min_variance
@@ -413,7 +487,7 @@ def test_load_config_rejects_duplicate_benchmark_objectives(tmp_path: Path) -> N
         optimization_block="""
 optimization:
   long_only: true
-  max_weight_per_etf: 0.30
+  default_max_weight_per_etf: 0.30
   active_objective: max_sharpe
   benchmark_objectives:
     - equal_weight
@@ -431,7 +505,7 @@ def test_load_config_rejects_active_objective_in_benchmark_objectives(tmp_path: 
         optimization_block="""
 optimization:
   long_only: true
-  max_weight_per_etf: 0.30
+  default_max_weight_per_etf: 0.30
   active_objective: max_sharpe
   benchmark_objectives:
     - equal_weight
@@ -584,7 +658,7 @@ def _write_minimal_config(
         or """
 optimization:
   long_only: true
-  max_weight_per_etf: 0.30
+  default_max_weight_per_etf: 0.30
   active_objective: equal_weight
   benchmark_objectives:
     - min_variance
@@ -687,7 +761,7 @@ investor_profile:
   tax_preference: minimize_realized_gains
 optimization:
   long_only: true
-  max_weight_per_etf: 0.25
+  default_max_weight_per_etf: 0.25
   active_objective: equal_weight
   benchmark_objectives:
     - min_variance

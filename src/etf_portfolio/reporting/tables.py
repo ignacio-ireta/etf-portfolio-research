@@ -25,6 +25,7 @@ def build_metrics_table(
     periods_per_year: int,
     benchmark_returns: pd.Series | None = None,
     benchmark_suite: dict[str, pd.Series] | None = None,
+    benchmark_weights: dict[str, pd.DataFrame] | None = None,
     risk_free_rate: float = 0.0,
 ) -> pd.DataFrame:
     """Build a metrics table for the portfolio and optional benchmark suite."""
@@ -42,6 +43,8 @@ def build_metrics_table(
             portfolio_returns,
             weights=effective_weights,
             benchmark_returns=benchmark_suite,
+            primary_benchmark_returns=benchmark_returns,
+            benchmark_weights=benchmark_weights,
             periods_per_year=periods_per_year,
             risk_free_rate=risk_free_rate,
         )

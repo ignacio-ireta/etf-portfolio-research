@@ -65,7 +65,7 @@ Implemented v1 constraints:
 
 Ticker bound behavior:
 
-- global `optimization.max_weight_per_etf` and optimizer `min_weight` define default per-asset bounds
+- `optimization.default_max_weight_per_etf` and optimizer `min_weight` define default per-asset bounds
 - `constraints.ticker_bounds` overrides those defaults per ticker when provided
 - feasibility is checked before solve using the effective per-ticker bounds:
   - `sum(min_bounds) <= weight_sum`
@@ -107,6 +107,8 @@ Backtest windowing and realized holdings:
 - with `rebalance.realized_constraint_policy: enforce_hard`, contribution-only may perform a sell-based fallback rebalance when realized hard caps are breached; with `report_drift`, those breaches are reported as soft drift warnings instead
 
 ## Risk Metrics
+
+Canonical metric explanations live in [Metric Dictionary](metric_dictionary.md).
 
 Implemented portfolio and backtest metrics include:
 

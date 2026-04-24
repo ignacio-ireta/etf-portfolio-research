@@ -47,7 +47,7 @@ investor_profile:
 
 optimization:
   long_only: true
-  max_weight_per_etf: 0.25
+  default_max_weight_per_etf: 0.25
   risk_model: ledoit_wolf
   expected_return_estimator: historical_mean
   active_objective: max_sharpe

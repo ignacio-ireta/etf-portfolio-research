@@ -28,6 +28,8 @@ Primary generated outputs:
 - `reports/metrics/backtest_metrics.json`
 - `reports/runs/*.json`
 
+For reproducible beginner walkthroughs using the current generated artifacts, see [Guided Examples](guided_examples.md).
+
 Current workbook/report layout:
 
 - `optimized_portfolios.xlsx` captures the latest optimizer output for the active objective.
@@ -60,7 +62,7 @@ Common checks:
 
 - confirm `data/processed/returns.parquet` exists and has enough history
 - confirm benchmark ticker exists in the ingested data
-- confirm `max_weight_per_etf` is feasible for the universe size
+- confirm `default_max_weight_per_etf` is feasible for the universe size
 - confirm ticker and asset-class bounds do not conflict
 - confirm minimum bond exposure is satisfiable by the current universe
 - confirm no asset column is entirely null after alignment

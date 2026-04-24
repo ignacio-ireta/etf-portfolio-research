@@ -15,6 +15,7 @@ from plotly.io import to_html, write_image
 
 from etf_portfolio.backtesting.engine import WalkForwardBacktestResult
 from etf_portfolio.logging_config import get_logger, log_event
+from etf_portfolio.metric_dictionary import metric_dictionary_table
 from etf_portfolio.reporting.plots import (
     build_benchmark_comparison_figure,
     build_cumulative_returns_figure,
@@ -45,6 +46,7 @@ from etf_portfolio.risk.attribution import (
     return_attribution,
     risk_attribution,
 )
+from etf_portfolio.trust_safety import common_false_conclusions_table
 
 LOGGER = get_logger(__name__)
 PLACEHOLDER_PNG = base64.b64decode(
@@ -71,6 +73,36 @@ SECTION_EXPLANATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         (
             "What to watch",
             "A narrow or biased universe can make results look more confident than they are.",
+        ),
+    ),
+    "Metric Dictionary": (
+        (
+            "What this shows",
+            "Canonical plain-language definitions for metrics used by the report and pipeline.",
+        ),
+        (
+            "How to interpret it",
+            "Use this as the reference point for what each metric means before comparing values.",
+        ),
+        (
+            "What to watch",
+            "Metric values are only meaningful when the caveats and assumptions fit the question "
+            "you are asking.",
+        ),
+    ),
+    "Trust And Safety": (
+        (
+            "What this shows",
+            "Common ways readers can overinterpret the report, plus safer readings to use instead.",
+        ),
+        (
+            "How to interpret it",
+            "Read this before treating any optimized portfolio, metric, or backtest as a decision.",
+        ),
+        (
+            "What to watch",
+            "The report is evidence under assumptions. It is not a forecast, guarantee, or "
+            "personalized recommendation.",
         ),
     ),
     "Data Coverage Table": (
@@ -366,6 +398,7 @@ def generate_html_report(
     max_weight: float = 1.0,
     title: str = "ETF Portfolio Research Report",
     benchmark_suite: dict[str, pd.Series] | None = None,
+    benchmark_weights: dict[str, pd.DataFrame] | None = None,
     metadata: pd.DataFrame | None = None,
     primary_benchmark_returns: pd.Series | None = None,
     rolling_window: int = 63,
@@ -394,6 +427,7 @@ def generate_html_report(
         risk_free_rate=risk_free_rate,
         max_weight=max_weight,
         benchmark_suite=benchmark_suite,
+        benchmark_weights=benchmark_weights,
         metadata=metadata,
         primary_benchmark_returns=primary_benchmark_returns,
         rolling_window=rolling_window,
@@ -564,6 +598,7 @@ def generate_report_bundle(
     max_weight: float = 1.0,
     title: str = "ETF Portfolio Research Report",
     benchmark_suite: dict[str, pd.Series] | None = None,
+    benchmark_weights: dict[str, pd.DataFrame] | None = None,
     metadata: pd.DataFrame | None = None,
     primary_benchmark_returns: pd.Series | None = None,
     rolling_window: int = 63,
@@ -591,6 +626,7 @@ def generate_report_bundle(
         max_weight=max_weight,
         title=title,
         benchmark_suite=benchmark_suite,
+        benchmark_weights=benchmark_weights,
         metadata=metadata,
         primary_benchmark_returns=primary_benchmark_returns,
         rolling_window=rolling_window,
@@ -615,6 +651,7 @@ def generate_report_bundle(
         periods_per_year=periods_per_year,
         risk_free_rate=risk_free_rate,
         benchmark_suite=benchmark_suite,
+        benchmark_weights=benchmark_weights,
         metadata=metadata,
         primary_benchmark_returns=primary_benchmark_returns,
         prices=prices,
@@ -661,6 +698,7 @@ def _build_report_sections(
     risk_free_rate: float,
     max_weight: float,
     benchmark_suite: dict[str, pd.Series] | None,
+    benchmark_weights: dict[str, pd.DataFrame] | None,
     metadata: pd.DataFrame | None,
     primary_benchmark_returns: pd.Series | None,
     rolling_window: int,
@@ -687,6 +725,7 @@ def _build_report_sections(
             else None
         ),
         benchmark_suite=benchmark_suite,
+        benchmark_weights=benchmark_weights,
         risk_free_rate=risk_free_rate,
     )
     latest_realized_weights = build_weights_table(backtest_result.applied_weights)
@@ -726,6 +765,8 @@ def _build_report_sections(
             ),
         )
     ]
+    sections.append(("Trust And Safety", _table_html(common_false_conclusions_table())))
+    sections.append(("Metric Dictionary", _table_html(metric_dictionary_table())))
     if metadata is not None:
         sections.append(
             (
@@ -1099,6 +1140,7 @@ def _write_report_workbook(
     periods_per_year: int,
     risk_free_rate: float,
     benchmark_suite: dict[str, pd.Series] | None,
+    benchmark_weights: dict[str, pd.DataFrame] | None,
     metadata: pd.DataFrame | None,
     primary_benchmark_returns: pd.Series | None,
     prices: pd.DataFrame | None,
@@ -1122,6 +1164,7 @@ def _write_report_workbook(
                 else None
             ),
             benchmark_suite=benchmark_suite,
+            benchmark_weights=benchmark_weights,
             risk_free_rate=risk_free_rate,
         ),
         "latest_realized_portfolio": build_weights_table(backtest_result.applied_weights),
@@ -1196,6 +1239,8 @@ def _write_report_workbook(
         assumptions=assumptions,
         limitations=limitations,
     )
+    workbook_tables["trust_and_safety"] = common_false_conclusions_table()
+    workbook_tables["metric_dictionary"] = metric_dictionary_table()
 
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         for sheet_name, table in workbook_tables.items():
@@ -1234,7 +1279,7 @@ def _write_figure_exports(
 
 
 def _table_html(table: pd.DataFrame) -> str:
-    return table.to_html(index=False, border=0)
+    return table.to_html(index=False, border=0, na_rep="")
 
 
 def _figure_html(figure: Figure) -> str:

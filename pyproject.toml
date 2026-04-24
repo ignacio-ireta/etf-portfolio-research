@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling>=1.24.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "etf-portfolio-research"
+version = "0.1.0"
+description = "Reproducible ETF portfolio research project scaffold."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "kaleido",
+  "numpy",
+  "mlflow",
+  "openpyxl",
+  "pandas",
+  "pandera",
+  "plotly",
+  "pyarrow",
+  "pydantic",
+  "pyportfolioopt",
+  "pyyaml",
+  "scikit-learn",
+  "scipy",
+  "yfinance",
+]
+
+[project.scripts]
+etf-portfolio = "etf_portfolio.cli:main"
+
+[dependency-groups]
+dev = [
+  "dvc",
+  "pytest",
+  "ruff",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/etf_portfolio"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = ["legacy", "notebooks"]
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "I",
+  "UP",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"

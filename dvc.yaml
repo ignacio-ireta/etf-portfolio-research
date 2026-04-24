@@ -1,0 +1,64 @@
+stages:
+  ingest:
+    cmd: uv run python -m etf_portfolio.cli ingest --config configs/base.yaml
+    deps:
+      - src/etf_portfolio/cli.py
+      - src/etf_portfolio/data/ingest.py
+      - src/etf_portfolio/data/providers.py
+      - configs/base.yaml
+      - data/metadata/etf_universe.csv
+    outs:
+      - data/raw/prices.parquet
+
+  validate:
+    cmd: uv run python -m etf_portfolio.cli validate --config configs/base.yaml
+    deps:
+      - src/etf_portfolio/cli.py
+      - src/etf_portfolio/data/validate.py
+      - data/raw/prices.parquet
+      - configs/base.yaml
+      - data/metadata/etf_universe.csv
+    outs:
+      - data/processed/prices_validated.parquet
+
+  features:
+    cmd: uv run python -m etf_portfolio.cli features --config configs/base.yaml
+    deps:
+      - src/etf_portfolio/cli.py
+      - src/etf_portfolio/features/returns.py
+      - data/processed/prices_validated.parquet
+    outs:
+      - data/processed/returns.parquet
+
+  optimize:
+    cmd: uv run python -m etf_portfolio.cli optimize --config configs/base.yaml
+    deps:
+      - src/etf_portfolio/cli.py
+      - src/etf_portfolio/optimization/optimizer.py
+      - src/etf_portfolio/reporting/plots.py
+      - data/processed/returns.parquet
+      - configs/base.yaml
+    outs:
+      - reports/excel/optimized_portfolios.xlsx
+      - reports/html/frontier.html
+
+  backtest:
+    cmd: uv run python -m etf_portfolio.cli backtest --config configs/base.yaml
+    deps:
+      - src/etf_portfolio/cli.py
+      - src/etf_portfolio/backtesting/engine.py
+      - src/etf_portfolio/backtesting/metrics.py
+      - src/etf_portfolio/reporting/plots.py
+      - src/etf_portfolio/reporting/report.py
+      - src/etf_portfolio/reporting/tables.py
+      - data/processed/returns.parquet
+      - data/processed/prices_validated.parquet
+      - data/metadata/etf_universe.csv
+      - configs/base.yaml
+    outs:
+      - reports/excel/portfolio_results.xlsx
+      - reports/figures
+      - reports/html/latest_report.html
+      - reports/html/backtest_report.html
+    metrics:
+      - reports/metrics/backtest_metrics.json

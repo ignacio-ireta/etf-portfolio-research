@@ -1,0 +1,8 @@
+........................................................................ [ 34%]
+........................................................................ [ 68%]
+.................................................................        [100%]{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-24T13:59:44.698103+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-24T13:59:44.698238+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-24T13:59:44.698370+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-24T13:59:44.698398+00:00"}
+
+209 passed in 128.14s (0:02:08)

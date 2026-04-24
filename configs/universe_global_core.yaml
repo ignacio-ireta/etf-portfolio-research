@@ -1,0 +1,26 @@
+universe:
+  tickers:
+    - VTI
+    - VEA
+    - VWO
+    - BND
+    - IEI
+    - TIP
+    - IAU
+    - VNQ
+    - GSG
+    - QQQ
+    - TLT
+    - REMX
+
+benchmark:
+  primary: VT
+  secondary:
+    global_60_40:
+      VT: 0.60
+      BND: 0.40
+    simple_global_baseline:
+      VTI: 0.55
+      VEA: 0.25
+      VWO: 0.10
+      BND: 0.10

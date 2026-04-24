@@ -1,0 +1,26 @@
+universe:
+  tickers:
+    - VTI
+    - BND
+    - IEI
+    - TIP
+    - IAU
+    - VNQ
+    - QQQ
+    - TLT
+
+benchmark:
+  primary: VTI
+  secondary:
+    us_60_40:
+      VTI: 0.60
+      BND: 0.40
+
+constraints:
+  asset_class_bounds:
+    equity:
+      min: 0.50
+      max: 0.90
+    fixed_income:
+      min: 0.10
+      max: 0.45

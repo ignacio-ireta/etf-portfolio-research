@@ -1,0 +1,185 @@
+{
+  "backtest_metrics": {
+    "Alpha": 0.026387,
+    "Annualized Volatility": 0.11397,
+    "Average Number of Holdings": 9.27027,
+    "Best Month": 0.085275,
+    "Beta": 0.636472,
+    "CAGR": 0.104385,
+    "Calmar Ratio": 0.425367,
+    "Herfindahl Concentration Index": 0.229715,
+    "Information Ratio": -0.115711,
+    "Largest Position": 0.455276,
+    "Max Drawdown": -0.2454,
+    "Sharpe Ratio": 0.665163,
+    "Sortino Ratio": 0.931771,
+    "Tracking Error": 0.073217,
+    "Turnover": 0.021259,
+    "Worst Month": -0.081025,
+    "Worst Quarter": -0.141132
+  },
+  "benchmark": "VT",
+  "config_hash": "3e22eca7c4e149af31bb7ef23d3892c1fcfa906a552e779a6e51385fe1d778ba",
+  "constraints": {
+    "asset_class_bounds": {
+      "commodity": {
+        "max": 0.15,
+        "min": 0.0
+      },
+      "equity": {
+        "max": 0.9,
+        "min": 0.5
+      },
+      "fixed_income": {
+        "max": 0.45,
+        "min": 0.1
+      },
+      "real_estate": {
+        "max": 0.1,
+        "min": 0.0
+      }
+    },
+    "ticker_bounds": {
+      "BND": {
+        "max": 0.4,
+        "min": 0.0
+      },
+      "GSG": {
+        "max": 0.1,
+        "min": 0.0
+      },
+      "IAU": {
+        "max": 0.15,
+        "min": 0.0
+      },
+      "IEI": {
+        "max": 0.3,
+        "min": 0.0
+      },
+      "QQQ": {
+        "max": 0.15,
+        "min": 0.0
+      },
+      "REMX": {
+        "max": 0.05,
+        "min": 0.0
+      },
+      "TIP": {
+        "max": 0.2,
+        "min": 0.0
+      },
+      "TLT": {
+        "max": 0.15,
+        "min": 0.0
+      },
+      "VEA": {
+        "max": 0.35,
+        "min": 0.05
+      },
+      "VNQ": {
+        "max": 0.1,
+        "min": 0.0
+      },
+      "VTI": {
+        "max": 0.6,
+        "min": 0.2
+      },
+      "VWO": {
+        "max": 0.2,
+        "min": 0.0
+      }
+    }
+  },
+  "data_version": {
+    "exists": true,
+    "path": "/Users/astridlysheim/Projects/etf-portfolio-research/data/processed/returns.parquet",
+    "sha256": "a10a09f46d9df226a4d39cf4eddab15b33a8819f38c733cd9cb81549f048caad"
+  },
+  "end_date": "2026-04-23",
+  "expected_return_estimator": "historical_mean",
+  "git_commit_hash": null,
+  "optimization_method": "max_sharpe",
+  "output_artifacts": {
+    "figure_asset_class_exposure": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/figures/asset_class_exposure.png",
+      "sha256": "1813c41b67b67659e2fdaf3fc4b626ac2f71256aecee7acfff5e9e03126d4cd0"
+    },
+    "figure_benchmark_comparison": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/figures/benchmark_comparison.png",
+      "sha256": "de5923976a61ccc18654678b10f91fb330f2b63d40f00a3064c9216cf3c016fe"
+    },
+    "figure_cumulative_returns": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/figures/cumulative_returns.png",
+      "sha256": "a56231314bc44c40a04de63e5af41321abfbdd4d615b245978180b23ccbe04be"
+    },
+    "figure_drawdown": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/figures/drawdown.png",
+      "sha256": "ba81d2e6efb680c7a7f0be97287b8731a8606550df569878fdf384bd885eec13"
+    },
+    "figure_efficient_frontier": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/figures/efficient_frontier.png",
+      "sha256": "85491cb936b24163a9fbb503299b7f322484e429df29e2a200f874fdee866508"
+    },
+    "figure_portfolio_weights": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/figures/portfolio_weights.png",
+      "sha256": "a0f8a0aec14bf161557d7e6b440ae0a4a1aee58e73575424572114f868d46e41"
+    },
+    "figure_region_exposure": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/figures/region_exposure.png",
+      "sha256": "3fbdbd969c829782fd3c312e4b4f4eb449e5aa2c432d62c919417b56a66f6398"
+    },
+    "figure_rolling_correlation": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/figures/rolling_correlation.png",
+      "sha256": "cfb1f68fe962e882041e19a70a9b63faa34908915a58bd6631f9c556df1fcba0"
+    },
+    "figure_rolling_sharpe": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/figures/rolling_sharpe.png",
+      "sha256": "3ec3134ea26ab8e9a24991698b02379dd7e212f024598656a46bd45c13cae498"
+    },
+    "figure_rolling_volatility": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/figures/rolling_volatility.png",
+      "sha256": "54b1b804e6933068815732303f0bddcb4aa4aa910c84708bb19cf6bef07114b3"
+    },
+    "figure_stress_periods": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/figures/stress_periods.png",
+      "sha256": "37ec8e6cfe4e62431ed75329ff9a02abf8e6ab6a19f576d7d02a1e4efee2c9e3"
+    },
+    "figure_weighted_expense_over_time": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/figures/weighted_expense_over_time.png",
+      "sha256": "107b9c3d3fd5d1063ea34969b68ec6143bb7b29d369cbb7cabb6d7ea6c4e2cc7"
+    },
+    "metrics": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/metrics/backtest_metrics.json",
+      "sha256": "5ca5a00d40ddbba83f5ecd62a4a5a2df8b55e37b4c4308c5a059f0b8b4c8fd4c"
+    },
+    "report": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/html/latest_report.html",
+      "sha256": "fad62e26b6c23ef4d37d1d24f9b966bca9a997542e7c5df2d435f86caea12c4c"
+    },
+    "workbook": {
+      "exists": true,
+      "path": "/Users/astridlysheim/Projects/etf-portfolio-research/reports/excel/portfolio_results.xlsx",
+      "sha256": "06f6f0e44f3b71525dc630af9a397a860beb01a804986e04e456a62670d47b39"
+    }
+  },
+  "risk_model": "ledoit_wolf",
+  "run_id": "run-all-20260424T131516Z-2e416d52",
+  "stage": "backtest",
+  "start_date": "2014-01-31",
+  "timestamp_utc": "2026-04-24T13:15:46.321098+00:00",
+  "universe_id": "8befa22e708529d8"
+}

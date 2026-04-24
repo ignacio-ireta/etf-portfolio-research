@@ -1,0 +1,49 @@
+optimization:
+  long_only: true
+  max_weight_per_etf: 0.25
+
+constraints:
+  asset_class_bounds:
+    equity:
+      min: 0.50
+      max: 0.90
+    fixed_income:
+      min: 0.10
+      max: 0.45
+  ticker_bounds:
+    VTI:
+      min: 0.20
+      max: 0.60
+    VEA:
+      min: 0.05
+      max: 0.35
+    VWO:
+      min: 0.00
+      max: 0.20
+    BND:
+      min: 0.00
+      max: 0.40
+    IEI:
+      min: 0.00
+      max: 0.30
+    TIP:
+      min: 0.00
+      max: 0.20
+    IAU:
+      min: 0.00
+      max: 0.15
+    VNQ:
+      min: 0.00
+      max: 0.10
+    GSG:
+      min: 0.00
+      max: 0.10
+    QQQ:
+      min: 0.00
+      max: 0.15
+    TLT:
+      min: 0.00
+      max: 0.15
+    REMX:
+      min: 0.00
+      max: 0.05

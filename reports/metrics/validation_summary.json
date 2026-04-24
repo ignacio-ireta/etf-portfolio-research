@@ -1,0 +1,33 @@
+{
+  "history_coverage": {
+    "BND": 1.0,
+    "GSG": 1.0,
+    "IAU": 1.0,
+    "IEI": 1.0,
+    "QQQ": 1.0,
+    "REMX": 1.0,
+    "TIP": 1.0,
+    "TLT": 1.0,
+    "VEA": 1.0,
+    "VNQ": 1.0,
+    "VT": 1.0,
+    "VTI": 1.0,
+    "VWO": 1.0
+  },
+  "missing_data_fraction": {
+    "BND": 0.0,
+    "GSG": 0.0,
+    "IAU": 0.0,
+    "IEI": 0.0,
+    "QQQ": 0.0,
+    "REMX": 0.0,
+    "TIP": 0.0,
+    "TLT": 0.0,
+    "VEA": 0.0,
+    "VNQ": 0.0,
+    "VT": 0.0,
+    "VTI": 0.0,
+    "VWO": 0.0
+  },
+  "suspicious_jump_count": 0
+}

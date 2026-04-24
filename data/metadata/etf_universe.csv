@@ -1,0 +1,23 @@
+ticker,name,asset_class,region,sector,currency,expense_ratio,benchmark_index,is_leveraged,is_inverse,inception_date,role,notes
+VTI,Vanguard Total Stock Market ETF,equity,US,total_market,USD,0.0003,CRSP US Total Market Index,false,false,2001-05-24,core,US total-market equity core
+QQQ,Invesco QQQ Trust,equity,US,growth,USD,0.0020,Nasdaq-100 Index,false,false,1999-03-10,satellite,US growth tilt; significant overlap with VTI top names
+VEA,Vanguard FTSE Developed Markets ETF,equity,Developed ex-US,developed_markets,USD,0.0006,FTSE Developed All Cap ex US Index,false,false,2007-07-20,core,Developed ex-US equity core
+VWO,Vanguard FTSE Emerging Markets ETF,equity,Emerging Markets,emerging_markets,USD,0.0008,FTSE Emerging Markets All Cap China A Inclusion Index,false,false,2005-03-10,core,Emerging markets equity core
+BND,Vanguard Total Bond Market ETF,fixed_income,US,aggregate_bonds,USD,0.0003,Bloomberg U.S. Aggregate Float Adjusted Index,false,false,2007-04-03,core,US aggregate bonds core
+IEI,iShares 3-7 Year Treasury Bond ETF,fixed_income,US,intermediate_treasuries,USD,0.0015,ICE U.S. Treasury 3-7 Year Bond Index,false,false,2007-01-05,core,Intermediate Treasuries core duration lever
+TLT,iShares 20+ Year Treasury Bond ETF,fixed_income,US,long_duration_treasuries,USD,0.0015,ICE U.S. Treasury 20+ Year Bond Index,false,false,2002-07-22,satellite,Long-duration Treasuries; capped to 15%
+TIP,iShares TIPS Bond ETF,fixed_income,US,inflation_linked_bonds,USD,0.0019,Bloomberg U.S. Treasury Inflation Protected Securities Index,false,false,2003-12-04,core,Inflation-protected bonds
+IAU,iShares Gold Trust,commodity,Global,precious_metals,USD,0.0025,LBMA Gold Price,false,false,2005-01-21,core,Gold exposure
+VNQ,Vanguard Real Estate ETF,real_estate,US,REITs,USD,0.0013,MSCI US Investable Market Real Estate 25/50 Index,false,false,2004-09-29,core,US REITs
+GSG,iShares S&P GSCI Commodity-Indexed Trust,commodity,Global,broad_commodities,USD,0.0075,S&P GSCI Total Return Index,false,false,2006-07-21,core,Broad commodities exposure
+REMX,VanEck Rare Earth and Strategic Metals ETF,equity,Global,materials,USD,0.0058,MVIS Global Rare Earth Strategic Metals Index,false,false,2010-10-27,satellite,Rare earth / strategic metals thematic; cap 5%
+VT,Vanguard Total World Stock ETF,equity,Global,total_market,USD,0.0006,FTSE Global All Cap Index,false,false,2008-06-24,benchmark,Primary global equity benchmark
+VXUS,Vanguard Total International Stock ETF,equity,Global ex-US,total_market,USD,0.0007,FTSE Global All Cap ex US Index,false,false,2011-01-26,benchmark,Reference international benchmark; not held in v1
+SPY,SPDR S&P 500 ETF Trust,equity,US,large_cap_blend,USD,0.0009,S&P 500 Index,false,false,1993-01-22,benchmark,Reference US large-cap benchmark; not held in v1
+VOO,Vanguard S&P 500 ETF,equity,US,large_cap_blend,USD,0.0003,S&P 500,false,false,2010-09-07,excluded,Excluded; redundant with VTI total-market
+IVV,iShares Core S&P 500 ETF,equity,US,large_cap_blend,USD,0.0003,S&P 500,false,false,2000-05-15,excluded,Excluded; redundant with VTI total-market
+IWM,iShares Russell 2000 ETF,equity,US,small_cap,USD,0.0019,Russell 2000 Index,false,false,2000-05-22,excluded,Excluded; small-cap exposure already inside VTI
+AGG,iShares Core U.S. Aggregate Bond ETF,fixed_income,US,aggregate_bonds,USD,0.0003,Bloomberg U.S. Aggregate Bond Index,false,false,2003-09-22,excluded,Excluded; redundant twin of BND
+IEF,iShares 7-10 Year Treasury Bond ETF,fixed_income,US,intermediate_treasuries,USD,0.0015,ICE U.S. Treasury 7-10 Year Bond Index,false,false,2002-07-22,excluded,Excluded; overlaps IEI and TLT duration buckets
+GLD,SPDR Gold Shares,commodity,Global,precious_metals,USD,0.0040,LBMA Gold Price PM,false,false,2004-11-18,excluded,Excluded; IAU covers gold at lower fee
+DBC,Invesco DB Commodity Index Tracking Fund,commodity,Global,broad_commodities,USD,0.0085,DBIQ Optimum Yield Diversified Commodity Index Excess Return,false,false,2006-02-03,excluded,Excluded; user preferred GSG for broad commodities

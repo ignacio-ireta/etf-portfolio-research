@@ -1,0 +1,184 @@
+project:
+  name: etf_portfolio_research
+  base_currency: USD
+
+universe:
+  tickers:
+    - VTI
+    - VEA
+    - VWO
+    - BND
+    - IEI
+    - TIP
+    - IAU
+    - VNQ
+    - GSG
+    - QQQ
+    - TLT
+    - REMX
+
+benchmark:
+  primary: VT
+  secondary:
+    global_60_40:
+      VT: 0.60
+      BND: 0.40
+    simple_global_baseline:
+      VTI: 0.55
+      VEA: 0.25
+      VWO: 0.10
+      BND: 0.10
+
+data:
+  provider: yfinance
+  start_date: "2011-01-01"
+  end_date: null
+  price_field: adjusted_close
+  cross_check:
+    enabled: false
+    provider: tiingo
+    max_relative_divergence: 0.005
+    min_overlap_observations: 20
+
+investor_profile:
+  horizon_years: 35
+  objective: long_term_accumulation
+  tax_preference: minimize_realized_gains
+
+optimization:
+  long_only: true
+  max_weight_per_etf: 0.25
+  risk_model: ledoit_wolf
+  expected_return_estimator: historical_mean
+  active_objective: max_sharpe
+  benchmark_objectives:
+    - equal_weight
+    - inverse_volatility
+    - min_variance
+    - risk_parity
+
+constraints:
+  asset_class_bounds:
+    equity:
+      min: 0.50
+      max: 0.90
+    fixed_income:
+      min: 0.10
+      max: 0.45
+    commodity:
+      min: 0.00
+      max: 0.15
+    real_estate:
+      min: 0.00
+      max: 0.10
+  ticker_bounds:
+    VTI:
+      min: 0.20
+      max: 0.60
+    VEA:
+      min: 0.05
+      max: 0.35
+    VWO:
+      min: 0.00
+      max: 0.20
+    BND:
+      min: 0.00
+      max: 0.40
+    IEI:
+      min: 0.00
+      max: 0.30
+    TIP:
+      min: 0.00
+      max: 0.20
+    IAU:
+      min: 0.00
+      max: 0.15
+    VNQ:
+      min: 0.00
+      max: 0.10
+    GSG:
+      min: 0.00
+      max: 0.10
+    QQQ:
+      min: 0.00
+      max: 0.15
+    TLT:
+      min: 0.00
+      max: 0.15
+    REMX:
+      min: 0.00
+      max: 0.05
+
+rebalance:
+  mode: contribution_only
+  frequency: monthly
+  realized_constraint_policy: report_drift
+  fallback_sell_allowed: false
+  fallback:
+    sell_allowed_if_absolute_drift_exceeds: 0.10
+  contribution_amount: 1500.0
+  tolerance_bands:
+    per_ticker_abs_drift: 0.05
+    per_asset_class_abs_drift: 0.10
+
+backtest:
+  start_date: "2012-01-01"
+  end_date: null
+  initial_capital: 100000.0
+
+costs:
+  transaction_cost_bps: 2
+  slippage_bps: 1
+
+risk_free:
+  source: constant
+  value: 0.03
+
+tracking:
+  artifact_dir: reports/runs
+
+ml:
+  enabled: false
+  task: regression
+  target: forward_return
+  horizon_periods: 21
+  models:
+    - historical_mean
+    - ridge
+    - random_forest
+  features:
+    lag_periods:
+      - 1
+      - 5
+      - 21
+    momentum_periods:
+      - 21
+      - 63
+      - 126
+      - 252
+    volatility_windows:
+      - 21
+      - 63
+    drawdown_windows:
+      - 63
+    correlation_windows:
+      - 63
+    moving_average_windows:
+      - 21
+      - 63
+  validation:
+    train_window_periods: 252
+    test_window_periods: 21
+    step_periods: 21
+    min_train_periods: 252
+  tracking:
+    enable_mlflow: true
+    experiment_name: etf_portfolio_research
+    artifact_dir: reports/ml
+    dataset_version: data/processed/returns.parquet
+    feature_version: v1
+  governance:
+    minimum_fold_win_rate: 0.60
+    minimum_folds_for_stability: 3
+    require_baseline_outperformance: true
+    require_leakage_checks: true

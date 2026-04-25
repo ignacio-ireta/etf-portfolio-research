@@ -1,6 +1,6 @@
 Command: uv run ruff check .
 Working directory: /Users/astridlysheim/Projects/etf-portfolio-research
-Started UTC: 2026-04-25T08:33:40Z
+Started UTC: 2026-04-25T09:02:08Z
 All checks passed!
-Finished UTC: 2026-04-25T08:33:40Z
+Finished UTC: 2026-04-25T09:02:09Z
 Exit code: 0

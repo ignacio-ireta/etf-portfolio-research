@@ -1,16 +1,17 @@
 Command: uv run pytest -q
 Working directory: /Users/astridlysheim/Projects/etf-portfolio-research
-Started UTC: 2026-04-25T08:33:40Z
-........................................................................ [ 25%]
-........................................................................ [ 50%]
-........................................................................ [ 75%]
-........................................................................ [100%]{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T08:37:55.350051+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T08:37:55.350185+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T08:37:55.350320+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T08:37:55.350351+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T08:37:55.350558+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T08:37:55.350591+00:00"}
+Started UTC: 2026-04-25T09:02:09Z
+........................................................................ [ 24%]
+........................................................................ [ 49%]
+........................................................................ [ 74%]
+........................................................................ [ 99%]
+.                                                                        [100%]{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T09:06:24.181012+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T09:06:24.181150+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T09:06:24.181316+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T09:06:24.181348+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T09:06:24.181531+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T09:06:24.181560+00:00"}
 
-288 passed in 254.60s (0:04:14)
-Finished UTC: 2026-04-25T08:37:55Z
+289 passed in 254.93s (0:04:14)
+Finished UTC: 2026-04-25T09:06:24Z
 Exit code: 0

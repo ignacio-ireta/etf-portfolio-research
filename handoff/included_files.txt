@@ -10,6 +10,7 @@
 ./data/processed/returns.parquet
 ./docs/architecture.md
 ./docs/assumptions_and_limitations.md
+./docs/configuration_reference.md
 ./docs/data_dictionary.md
 ./docs/glossary.md
 ./docs/guided_examples.md
@@ -47,7 +48,7 @@
 ./reports/figures/weighted_expense_over_time.png
 ./reports/html/latest_report.html
 ./reports/metrics/backtest_metrics.json
-./reports/runs/backtest_run-all-20260425T083756Z-f6f9560b.json
+./reports/runs/backtest_run-all-20260425T090625Z-2ff6c4c2.json
 ./scripts/generate_handoff_bundle.py
 ./src/etf_portfolio/__init__.py
 ./src/etf_portfolio/backtesting/contributions.py

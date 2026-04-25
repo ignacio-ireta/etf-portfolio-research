@@ -123,6 +123,8 @@ def test_generate_report_bundle_creates_expected_artifacts(tmp_path) -> None:
     assert "Data Coverage Table" in report_html
     assert "Stress Periods" in report_html
     assert "Exposure" in report_html
+    assert '<div class="table-scroll">' in report_html
+    assert '<div class="stack">' in report_html
     assert "Weighted Expense Ratio Over Time" in report_html
     assert "Assumptions and Limitations" in report_html
     assert "new weights and trade-cost impact start on the next return date" in report_html
@@ -140,6 +142,7 @@ def test_generate_report_bundle_creates_expected_artifacts(tmp_path) -> None:
         in report_html
     )
     assert report_html.count("plotly.js v") == 1
+    assert report_html.count('<div class="stack">') >= 3
     assert "drifted outside configured caps under soft realized-constraint handling" in report_html
     workbook = pd.ExcelFile(artifacts.workbook_path)
     assert "latest_realized_portfolio" in workbook.sheet_names

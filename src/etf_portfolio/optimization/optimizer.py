@@ -191,6 +191,7 @@ def optimize_portfolio(
         candidate_initial_weights=candidate_initial_weights,
         bounds=bounds,
         constraints=[*linear_constraints, *nonlinear_constraints],
+        accept_feasible_failure=validated_method == "max_sharpe",
     )
 
     if not result.success:
@@ -457,8 +458,11 @@ def _solve_with_retries(
     candidate_initial_weights: Sequence[np.ndarray],
     bounds: Any,
     constraints: Sequence[dict[str, Any]],
+    accept_feasible_failure: bool = False,
 ) -> Any:
     last_result: Any = None
+    best_feasible_failure: Any = None
+    best_feasible_failure_value = np.inf
     for candidate in candidate_initial_weights:
         result = minimize(
             objective,
@@ -471,7 +475,64 @@ def _solve_with_retries(
         last_result = result
         if result.success:
             return result
+        if accept_feasible_failure and _is_feasible_solver_output(
+            result.x,
+            objective=objective,
+            bounds=bounds,
+            constraints=constraints,
+        ):
+            objective_value = float(objective(np.asarray(result.x, dtype=float)))
+            if objective_value < best_feasible_failure_value:
+                best_feasible_failure = result
+                best_feasible_failure_value = objective_value
+    if best_feasible_failure is not None:
+        best_feasible_failure.success = True
+        best_feasible_failure.message = (
+            "Accepted feasible max_sharpe solution after SLSQP line-search failure"
+        )
+        return best_feasible_failure
     return last_result
+
+
+def _is_feasible_solver_output(
+    weights: np.ndarray,
+    *,
+    objective: Any,
+    bounds: Any,
+    constraints: Sequence[Any],
+) -> bool:
+    candidate = np.asarray(weights, dtype=float)
+    if not np.isfinite(candidate).all():
+        return False
+    if not _weights_within_bounds(candidate, bounds):
+        return False
+    try:
+        objective_value = float(objective(candidate))
+    except (TypeError, ValueError, FloatingPointError):
+        return False
+    if not np.isfinite(objective_value):
+        return False
+
+    for constraint in constraints:
+        if hasattr(constraint, "A"):
+            value = np.asarray(constraint.A @ candidate, dtype=float)
+            lower = np.broadcast_to(np.asarray(constraint.lb, dtype=float), value.shape)
+            upper = np.broadcast_to(np.asarray(constraint.ub, dtype=float), value.shape)
+            if np.any(value < lower - 1e-7) or np.any(value > upper + 1e-7):
+                return False
+            continue
+
+        constraint_type = constraint.get("type")
+        constraint_fun = constraint.get("fun")
+        if constraint_fun is None:
+            return False
+        value = np.asarray(constraint_fun(candidate), dtype=float)
+        if constraint_type == "eq" and np.any(np.abs(value) > 1e-7):
+            return False
+        if constraint_type == "ineq" and np.any(value < -1e-7):
+            return False
+
+    return True
 
 
 def _validate_bound_feasibility(

@@ -12,6 +12,7 @@
     "data/processed/returns.parquet",
     "docs/architecture.md",
     "docs/assumptions_and_limitations.md",
+    "docs/configuration_reference.md",
     "docs/data_dictionary.md",
     "docs/glossary.md",
     "docs/guided_examples.md",
@@ -49,7 +50,7 @@
     "reports/figures/weighted_expense_over_time.png",
     "reports/html/latest_report.html",
     "reports/metrics/backtest_metrics.json",
-    "reports/runs/backtest_run-all-20260425T083756Z-f6f9560b.json",
+    "reports/runs/backtest_run-all-20260425T090625Z-2ff6c4c2.json",
     "scripts/generate_handoff_bundle.py",
     "src/etf_portfolio/__init__.py",
     "src/etf_portfolio/backtesting/contributions.py",
@@ -125,83 +126,83 @@
   "artifacts": {
     "metrics_path": "reports/metrics/backtest_metrics.json",
     "run_all_log": "handoff/run_all.txt",
-    "run_id": "run-all-20260425T083756Z-f6f9560b",
-    "run_record_path": "reports/runs/backtest_run-all-20260425T083756Z-f6f9560b.json",
+    "run_id": "run-all-20260425T090625Z-2ff6c4c2",
+    "run_record_path": "reports/runs/backtest_run-all-20260425T090625Z-2ff6c4c2.json",
     "verified_output_artifacts": {
       "figure_asset_class_exposure": {
-        "mtime_utc": "2026-04-25T08:38:23Z",
+        "mtime_utc": "2026-04-25T09:06:52Z",
         "path": "reports/figures/asset_class_exposure.png",
-        "sha256": "de0d1fecd0856c800f611409c8c331fd62169a69ca8d24e74f2aadd950ca0fdc"
+        "sha256": "3b472cb4b390253575c1cb271f79c05a1b8eb5b417245294fc5e025518c44390"
       },
       "figure_benchmark_comparison": {
-        "mtime_utc": "2026-04-25T08:38:19Z",
+        "mtime_utc": "2026-04-25T09:06:47Z",
         "path": "reports/figures/benchmark_comparison.png",
-        "sha256": "5964674495275388a645de1600c7a310b9acc8ddfdda88fd361271be31643431"
+        "sha256": "e827c278567cb6d1a04507aacc3b5d7e52fef4b41c9b006cd899d6d687d6c560"
       },
       "figure_cumulative_returns": {
-        "mtime_utc": "2026-04-25T08:38:08Z",
+        "mtime_utc": "2026-04-25T09:06:37Z",
         "path": "reports/figures/cumulative_returns.png",
-        "sha256": "9ea449a6734cd67a4f4b4e7b676bb294c23abdcf6c264a011fad82b7fa2717c9"
+        "sha256": "9918fcb77d6fce0fa089f13ae75bdc3f173578e1d3a5e9f8163298a68900aaaf"
       },
       "figure_drawdown": {
-        "mtime_utc": "2026-04-25T08:38:10Z",
+        "mtime_utc": "2026-04-25T09:06:39Z",
         "path": "reports/figures/drawdown.png",
-        "sha256": "00ab3889013c6f090b61c4e2704d939cd1b4619fa1abe815e06cd72ce9455347"
+        "sha256": "74d12f139504b8819b65733ba5c0c2c23b9b640416012e095acd59337d9d86c8"
       },
       "figure_efficient_frontier": {
-        "mtime_utc": "2026-04-25T08:38:06Z",
+        "mtime_utc": "2026-04-25T09:06:35Z",
         "path": "reports/figures/efficient_frontier.png",
-        "sha256": "f57d85d5fea86db35af1a109b10c3b0ddc65022c6af97ec0c524122c410af129"
+        "sha256": "403d4b575db4d29ab56649a45369884d3e047647f19520e505c7f266f7a78299"
       },
       "figure_portfolio_weights": {
-        "mtime_utc": "2026-04-25T08:38:12Z",
+        "mtime_utc": "2026-04-25T09:06:41Z",
         "path": "reports/figures/portfolio_weights.png",
-        "sha256": "bf530ecfaa5a70ee8178630a2041a3ef2d3d16ea951e45c4361b0fcbd0032c5a"
+        "sha256": "404f50daf1237a99947ff73f2de0638ea4cf8e72b80c66cd38369450a03b7739"
       },
       "figure_region_exposure": {
-        "mtime_utc": "2026-04-25T08:38:25Z",
+        "mtime_utc": "2026-04-25T09:06:54Z",
         "path": "reports/figures/region_exposure.png",
-        "sha256": "79279aac0cbc1ba3c7bc50a581c129c8a2a38d79990a534118a3a3aab79abc21"
+        "sha256": "0cef9cc72bd591b9854bb6dcceb279b2a88dec1a2fb8fccf14a4c474cb632d90"
       },
       "figure_rolling_correlation": {
-        "mtime_utc": "2026-04-25T08:38:21Z",
+        "mtime_utc": "2026-04-25T09:06:49Z",
         "path": "reports/figures/rolling_correlation.png",
-        "sha256": "aa50c7d81e04bf470b2ac20598fd915f787c62ee4a02ecde2a951ab7543a7717"
+        "sha256": "c2fbee5ba1ed4acf17be1a5f79e3cbf7f471cf8c94a32e0c3a5e3c41caf55420"
       },
       "figure_rolling_sharpe": {
-        "mtime_utc": "2026-04-25T08:38:17Z",
+        "mtime_utc": "2026-04-25T09:06:45Z",
         "path": "reports/figures/rolling_sharpe.png",
-        "sha256": "79454bf73ec12dbe2186c07fa81cb4be07304536fef3a4280db9525c3ea856f5"
+        "sha256": "1c0732e3016d8767ee1f637e6c705d5ae1dd23674ba141b6a48b59c3aedacd98"
       },
       "figure_rolling_volatility": {
-        "mtime_utc": "2026-04-25T08:38:14Z",
+        "mtime_utc": "2026-04-25T09:06:43Z",
         "path": "reports/figures/rolling_volatility.png",
-        "sha256": "1cc052511fa67d35032be18538fce42f439e4080b8f289e4216e7272653ba974"
+        "sha256": "0030695a26977938aa8a2f328dde6bf6bf30e3ec4f4f2eb335416aac39535521"
       },
       "figure_stress_periods": {
-        "mtime_utc": "2026-04-25T08:38:29Z",
+        "mtime_utc": "2026-04-25T09:06:58Z",
         "path": "reports/figures/stress_periods.png",
-        "sha256": "eb44a08b4e531b1a6d586ec56deee0a6aa2cff8b8f65ffe1eddb7849980e5a55"
+        "sha256": "39c7503b7b07da9eefdb6e896974070327f4f065939ce2e390f10c874fd04c26"
       },
       "figure_weighted_expense_over_time": {
-        "mtime_utc": "2026-04-25T08:38:27Z",
+        "mtime_utc": "2026-04-25T09:06:56Z",
         "path": "reports/figures/weighted_expense_over_time.png",
-        "sha256": "2698e0dff2e610ef1297f0507ec740fab9ad6f349a4efe6eea925f213110a570"
+        "sha256": "c6a4f975fa9e9dc5e1cc5645e678613189bb2b25847333835d8039d1e875dfc3"
       },
       "metrics": {
-        "mtime_utc": "2026-04-25T08:38:29Z",
+        "mtime_utc": "2026-04-25T09:06:58Z",
         "path": "reports/metrics/backtest_metrics.json",
-        "sha256": "8541ea75353e602fe1632b04f3ef571b801600260198b248fdb09004d19a8c00"
+        "sha256": "63a8545900b6be5eee7380512ab9d82b74f2361f4cf5d05ab99096188148e0fe"
       },
       "report": {
-        "mtime_utc": "2026-04-25T08:38:04Z",
+        "mtime_utc": "2026-04-25T09:06:32Z",
         "path": "reports/html/latest_report.html",
-        "sha256": "f7aef5ea09446eefbec9bc9962b2c2416b830cd5969756aa7403223588001665"
+        "sha256": "af2bb129d08a869991105e1a6edde400e288d22220138d6f2eea0ffa6d90f324"
       },
       "workbook": {
-        "mtime_utc": "2026-04-25T08:38:04Z",
+        "mtime_utc": "2026-04-25T09:06:33Z",
         "path": "reports/excel/portfolio_results.xlsx",
-        "sha256": "89dba2b8bb4a8d5aeae0c38c632f4716f4c37c3aec2c22aac0599e0accffbbd9"
+        "sha256": "25ee86ce97a91fe0df2a97060f110afe78b062996c782a7843aedf1a8cee3051"
       }
     }
   },
@@ -221,30 +222,30 @@
     ],
     "logs": {
       "pytest": {
-        "mtime_utc": "2026-04-25T08:37:55Z",
+        "mtime_utc": "2026-04-25T09:06:24Z",
         "path": "handoff/pytest.txt"
       },
       "ruff_check": {
-        "mtime_utc": "2026-04-25T08:33:40Z",
+        "mtime_utc": "2026-04-25T09:02:09Z",
         "path": "handoff/ruff_check.txt"
       },
       "ruff_format_check": {
-        "mtime_utc": "2026-04-25T08:33:40Z",
+        "mtime_utc": "2026-04-25T09:02:09Z",
         "path": "handoff/ruff_format_check.txt"
       },
       "run_all": {
-        "mtime_utc": "2026-04-25T08:38:29Z",
+        "mtime_utc": "2026-04-25T09:06:58Z",
         "path": "handoff/run_all.txt"
       }
     },
-    "newest_source_file": "tests/unit/test_rebalancing_edge_cases.py",
-    "newest_source_timestamp": "2026-04-25T08:22:20Z"
+    "newest_source_file": "docs/runbook.md",
+    "newest_source_timestamp": "2026-04-25T09:00:28Z"
   },
-  "generated_at": "2026-04-25T08:38:29Z",
-  "git_commit": "54f51510eec39f6947f886cf5a0c4de72b7ea4e4",
-  "latest_run_id": "run-all-20260425T083756Z-f6f9560b",
-  "newest_source_path": "tests/unit/test_rebalancing_edge_cases.py",
-  "newest_source_timestamp": "2026-04-25T08:22:20Z",
+  "generated_at": "2026-04-25T09:06:58Z",
+  "git_commit": "5f795deae703d2d115e787337bfd9f26ee8808ee",
+  "latest_run_id": "run-all-20260425T090625Z-2ff6c4c2",
+  "newest_source_path": "docs/runbook.md",
+  "newest_source_timestamp": "2026-04-25T09:00:28Z",
   "status": "pass",
   "validation_commands": {
     "pytest": {
@@ -255,10 +256,10 @@
         "-q"
       ],
       "exit_code": 0,
-      "finished_utc": "2026-04-25T08:37:55Z",
-      "mtime_utc": "2026-04-25T08:37:55Z",
+      "finished_utc": "2026-04-25T09:06:24Z",
+      "mtime_utc": "2026-04-25T09:06:24Z",
       "path": "handoff/pytest.txt",
-      "started_utc": "2026-04-25T08:33:40Z"
+      "started_utc": "2026-04-25T09:02:09Z"
     },
     "ruff_check": {
       "command": [
@@ -269,10 +270,10 @@
         "."
       ],
       "exit_code": 0,
-      "finished_utc": "2026-04-25T08:33:40Z",
-      "mtime_utc": "2026-04-25T08:33:40Z",
+      "finished_utc": "2026-04-25T09:02:09Z",
+      "mtime_utc": "2026-04-25T09:02:09Z",
       "path": "handoff/ruff_check.txt",
-      "started_utc": "2026-04-25T08:33:40Z"
+      "started_utc": "2026-04-25T09:02:08Z"
     },
     "ruff_format_check": {
       "command": [
@@ -284,10 +285,10 @@
         "."
       ],
       "exit_code": 0,
-      "finished_utc": "2026-04-25T08:33:40Z",
-      "mtime_utc": "2026-04-25T08:33:40Z",
+      "finished_utc": "2026-04-25T09:02:09Z",
+      "mtime_utc": "2026-04-25T09:02:09Z",
       "path": "handoff/ruff_format_check.txt",
-      "started_utc": "2026-04-25T08:33:40Z"
+      "started_utc": "2026-04-25T09:02:09Z"
     },
     "run_all": {
       "command": [
@@ -299,10 +300,10 @@
         "configs/base.yaml"
       ],
       "exit_code": 0,
-      "finished_utc": "2026-04-25T08:38:29Z",
-      "mtime_utc": "2026-04-25T08:38:29Z",
+      "finished_utc": "2026-04-25T09:06:58Z",
+      "mtime_utc": "2026-04-25T09:06:58Z",
       "path": "handoff/run_all.txt",
-      "started_utc": "2026-04-25T08:37:55Z"
+      "started_utc": "2026-04-25T09:06:24Z"
     },
     "uv_sync": {
       "command": [
@@ -313,47 +314,47 @@
         "--frozen"
       ],
       "exit_code": 0,
-      "finished_utc": "2026-04-25T08:33:40Z",
-      "mtime_utc": "2026-04-25T08:33:40Z",
+      "finished_utc": "2026-04-25T09:02:08Z",
+      "mtime_utc": "2026-04-25T09:02:08Z",
       "path": "handoff/uv_sync.txt",
-      "started_utc": "2026-04-25T08:33:40Z"
+      "started_utc": "2026-04-25T09:02:08Z"
     }
   },
   "validation_log_timestamps": {
     "pytest": {
       "exit_code": 0,
-      "finished_utc": "2026-04-25T08:37:55Z",
-      "mtime_utc": "2026-04-25T08:37:55Z",
+      "finished_utc": "2026-04-25T09:06:24Z",
+      "mtime_utc": "2026-04-25T09:06:24Z",
       "path": "handoff/pytest.txt",
-      "started_utc": "2026-04-25T08:33:40Z"
+      "started_utc": "2026-04-25T09:02:09Z"
     },
     "ruff_check": {
       "exit_code": 0,
-      "finished_utc": "2026-04-25T08:33:40Z",
-      "mtime_utc": "2026-04-25T08:33:40Z",
+      "finished_utc": "2026-04-25T09:02:09Z",
+      "mtime_utc": "2026-04-25T09:02:09Z",
       "path": "handoff/ruff_check.txt",
-      "started_utc": "2026-04-25T08:33:40Z"
+      "started_utc": "2026-04-25T09:02:08Z"
     },
     "ruff_format_check": {
       "exit_code": 0,
-      "finished_utc": "2026-04-25T08:33:40Z",
-      "mtime_utc": "2026-04-25T08:33:40Z",
+      "finished_utc": "2026-04-25T09:02:09Z",
+      "mtime_utc": "2026-04-25T09:02:09Z",
       "path": "handoff/ruff_format_check.txt",
-      "started_utc": "2026-04-25T08:33:40Z"
+      "started_utc": "2026-04-25T09:02:09Z"
     },
     "run_all": {
       "exit_code": 0,
-      "finished_utc": "2026-04-25T08:38:29Z",
-      "mtime_utc": "2026-04-25T08:38:29Z",
+      "finished_utc": "2026-04-25T09:06:58Z",
+      "mtime_utc": "2026-04-25T09:06:58Z",
       "path": "handoff/run_all.txt",
-      "started_utc": "2026-04-25T08:37:55Z"
+      "started_utc": "2026-04-25T09:06:24Z"
     },
     "uv_sync": {
       "exit_code": 0,
-      "finished_utc": "2026-04-25T08:33:40Z",
-      "mtime_utc": "2026-04-25T08:33:40Z",
+      "finished_utc": "2026-04-25T09:02:08Z",
+      "mtime_utc": "2026-04-25T09:02:08Z",
       "path": "handoff/uv_sync.txt",
-      "started_utc": "2026-04-25T08:33:40Z"
+      "started_utc": "2026-04-25T09:02:08Z"
     }
   }
 }

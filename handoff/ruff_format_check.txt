@@ -1,6 +1,6 @@
 Command: uv run ruff format --check .
 Working directory: /Users/astridlysheim/Projects/etf-portfolio-research
-Started UTC: 2026-04-25T08:22:27Z
+Started UTC: 2026-04-25T08:33:40Z
 70 files already formatted
-Finished UTC: 2026-04-25T08:22:27Z
+Finished UTC: 2026-04-25T08:33:40Z
 Exit code: 0

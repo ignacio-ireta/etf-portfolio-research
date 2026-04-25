@@ -47,7 +47,7 @@
 ./reports/figures/weighted_expense_over_time.png
 ./reports/html/latest_report.html
 ./reports/metrics/backtest_metrics.json
-./reports/runs/backtest_run-all-20260425T082645Z-fb48ff0e.json
+./reports/runs/backtest_run-all-20260425T083756Z-f6f9560b.json
 ./scripts/generate_handoff_bundle.py
 ./src/etf_portfolio/__init__.py
 ./src/etf_portfolio/backtesting/contributions.py

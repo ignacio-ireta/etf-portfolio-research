@@ -1,5 +1,5 @@
 Command: uv run python scripts/generate_handoff_bundle.py
 Working directory: /Users/astridlysheim/Projects/etf-portfolio-research
-Finished UTC: 2026-04-25T08:27:18Z
+Finished UTC: 2026-04-25T08:38:29Z
 Exit code: 0
 Bundle file count: 121

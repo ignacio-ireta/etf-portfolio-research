@@ -445,7 +445,7 @@ class MLGovernanceConfig(BaseModel):
 
 
 class MLConfig(BaseModel):
-    enabled: bool = True
+    enabled: bool = False
     task: MLTask = "regression"
     target: MLTarget = "forward_return"
     horizon_periods: int = Field(default=21, gt=0)

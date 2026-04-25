@@ -8,7 +8,9 @@ vector into a non-negative dollar trade vector under that constraint.
 
 Properties guaranteed:
     1. All trades are >= 0 (no selling).
-    2. Over-weight tickers receive zero new capital.
+    2. Over-weight tickers receive zero new capital while under-weight gaps
+       remain unfilled; if a contribution exceeds all under-weight gaps, the
+       surplus is invested proportionally to target weights.
     3. Trades sum to the cash contribution exactly (within numerical tolerance).
 """
 

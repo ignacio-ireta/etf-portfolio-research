@@ -56,6 +56,11 @@ from etf_portfolio.tracking import (
 DEFAULT_LOOKBACK_PERIODS = 756
 LOGGER = get_logger(__name__)
 FIXED_INCOME_ASSET_CLASS = "fixed_income"
+ML_MODEL_TRAINING_SCOPE = "train_split"
+ML_MODEL_TRAINING_SCOPE_DESCRIPTION = (
+    "chronological train split only; the final test window remains held out for "
+    "evaluation and governance"
+)
 
 
 @dataclass(frozen=True)
@@ -751,7 +756,7 @@ def run_ml(
         ml_config=config.ml,
         benchmark_returns=benchmark_returns,
     )
-    train_frame, _ = chronological_train_test_split(
+    train_frame, test_frame = chronological_train_test_split(
         dataset.frame,
         test_window_periods=config.ml.validation.test_window_periods,
     )
@@ -765,7 +770,7 @@ def run_ml(
     )
 
     best_model_name = _select_best_ml_model(evaluation.summary, task=config.ml.task)
-    final_model = fit_model(
+    trained_model = fit_model(
         train_frame,
         feature_columns=dataset.feature_columns,
         target_column=dataset.target_column,
@@ -779,7 +784,7 @@ def run_ml(
     dataset_path = artifact_dir / "dataset.parquet"
     summary_path = artifact_dir / "summary.csv"
     fold_metrics_path = artifact_dir / "fold_metrics.csv"
-    model_path = artifact_dir / "model.pkl"
+    model_path = artifact_dir / f"model_{ML_MODEL_TRAINING_SCOPE}.pkl"
     metrics_path = artifact_dir / "metrics.json"
     governance_path = artifact_dir / "governance.json"
     model_card_path = artifact_dir / "model_card.md"
@@ -789,7 +794,7 @@ def run_ml(
     evaluation.summary.to_csv(summary_path, index=False)
     evaluation.fold_metrics.to_csv(fold_metrics_path, index=False)
     save_model_bundle(
-        final_model,
+        trained_model,
         output_path=model_path,
         feature_columns=dataset.feature_columns,
         target_column=dataset.target_column,
@@ -798,6 +803,14 @@ def run_ml(
             "model_name": best_model_name,
             "task": config.ml.task,
             "target": config.ml.target,
+            "training_scope": ML_MODEL_TRAINING_SCOPE,
+            "training_scope_description": ML_MODEL_TRAINING_SCOPE_DESCRIPTION,
+            "training_observations": int(len(train_frame)),
+            "training_start_date": _panel_date_min(train_frame),
+            "training_end_date": _panel_date_max(train_frame),
+            "holdout_observations": int(len(test_frame)),
+            "holdout_start_date": _panel_date_min(test_frame),
+            "holdout_end_date": _panel_date_max(test_frame),
         },
     )
 
@@ -811,9 +824,14 @@ def run_ml(
         model_path=model_path,
         leakage_checks=leakage_checks,
     )
+    governance["model_artifact"] = relative_to_project_root(project_root, model_path)
+    governance["model_training_scope"] = ML_MODEL_TRAINING_SCOPE
+    governance["model_training_scope_description"] = ML_MODEL_TRAINING_SCOPE_DESCRIPTION
+    governance["training_observations"] = int(len(train_frame))
+    governance["holdout_observations"] = int(len(test_frame))
     write_model_card(
         output_path=model_card_path,
-        run_id=run_id,
+        run_id=stage_run_id,
         config=config,
         governance=governance,
         summary=evaluation.summary,
@@ -826,11 +844,38 @@ def run_ml(
         "task": config.ml.task,
         "target": config.ml.target,
         "horizon_periods": config.ml.horizon_periods,
+        "model_artifact": relative_to_project_root(project_root, model_path),
+        "model_training_scope": ML_MODEL_TRAINING_SCOPE,
+        "model_training_scope_description": ML_MODEL_TRAINING_SCOPE_DESCRIPTION,
+        "training_observations": int(len(train_frame)),
+        "holdout_observations": int(len(test_frame)),
         "feature_columns": dataset.feature_columns,
         "summary": evaluation.summary.round(6).to_dict(orient="records"),
         "fold_count": int(evaluation.fold_metrics["fold"].nunique()),
         "governance": governance,
     }
+    run_record_path = project_root / config.tracking.artifact_dir / f"ml_{stage_run_id}.json"
+    metrics_payload["run_record"] = relative_to_project_root(project_root, run_record_path)
+    mlflow_status = log_mlflow_run(
+        config=config,
+        run_id=stage_run_id,
+        metrics=metrics_payload,
+        params=config.model_dump(mode="json"),
+        artifacts={
+            "dataset": str(dataset_path),
+            "predictions": str(predictions_path),
+            "summary": str(summary_path),
+            "fold_metrics": str(fold_metrics_path),
+            "model": str(model_path),
+            "governance": str(governance_path),
+            "model_card": str(model_card_path),
+        },
+        tags={
+            "approval_status": governance["approval_status"],
+            "run_record": metrics_payload["run_record"],
+        },
+    )
+    metrics_payload["mlflow"] = mlflow_status
     write_metrics_json(metrics_payload, metrics_path)
     run_record = build_run_record(
         stage="ml",
@@ -859,35 +904,19 @@ def run_ml(
             "leakage_checks": leakage_checks,
             "model_version": governance["model_version"],
             "approval_status": governance["approval_status"],
+            "model_artifact": governance["model_artifact"],
+            "model_training_scope": governance["model_training_scope"],
             "model_card": relative_to_project_root(project_root, model_card_path),
         },
     )
-    run_record_path = write_run_record(
+    written_run_record_path = write_run_record(
         run_record,
         artifact_dir=project_root / config.tracking.artifact_dir,
     )
-    mlflow_status = log_mlflow_run(
-        config=config,
-        run_id=stage_run_id,
-        metrics=metrics_payload,
-        params=config.model_dump(mode="json"),
-        artifacts={
-            "dataset": str(dataset_path),
-            "predictions": str(predictions_path),
-            "summary": str(summary_path),
-            "fold_metrics": str(fold_metrics_path),
-            "model": str(model_path),
-            "governance": str(governance_path),
-            "model_card": str(model_card_path),
-        },
-        tags={
-            "approval_status": governance["approval_status"],
-            "run_record": relative_to_project_root(project_root, run_record_path),
-        },
-    )
-    metrics_payload["mlflow"] = mlflow_status
-    metrics_payload["run_record"] = relative_to_project_root(project_root, run_record_path)
-    write_metrics_json(metrics_payload, metrics_path)
+    if written_run_record_path != run_record_path:
+        raise RuntimeError(
+            f"Unexpected run record path: {written_run_record_path} != {run_record_path}"
+        )
     log_event(
         LOGGER,
         logging.INFO,
@@ -918,6 +947,20 @@ def run_ml(
         "model_card": model_card_path,
         "metrics": metrics_path,
     }
+
+
+def _panel_date_min(frame: pd.DataFrame) -> str | None:
+    if frame.empty:
+        return None
+    date_index = frame.index.get_level_values("date")
+    return pd.Timestamp(date_index.min()).date().isoformat()
+
+
+def _panel_date_max(frame: pd.DataFrame) -> str | None:
+    if frame.empty:
+        return None
+    date_index = frame.index.get_level_values("date")
+    return pd.Timestamp(date_index.max()).date().isoformat()
 
 
 def build_price_provider(config: AppConfig) -> PriceDataProvider:
@@ -1012,6 +1055,23 @@ def _report_assumptions(config: AppConfig, optimization_method: str) -> dict[str
         ),
         "rebalance_mode": f"Rebalance mode: {config.rebalance.mode}",
         "rebalance_frequency": f"Rebalance frequency: {config.rebalance.frequency}",
+        "rebalance_execution": (
+            "Rebalance execution: target weights are estimated with returns strictly before "
+            "each rebalance date; the return labeled with the rebalance date remains in the "
+            "previous holding period; new weights and trade-cost impact start on the next "
+            "return date."
+        ),
+        "benchmark_fairness": (
+            "Optimized benchmark objectives use the same rebalance mode "
+            f"({config.rebalance.mode}), contribution amount "
+            f"({config.rebalance.contribution_amount:.2f}), initial capital, transaction "
+            "cost/slippage rate, constraints, and rebalance schedule as the main strategy."
+        ),
+        "benchmark_return_series": (
+            "The selected benchmark ETF and configured secondary allocation benchmarks are "
+            "external/theoretical return-series baselines; they are not simulated with "
+            "contribution-only drift or strategy transaction costs."
+        ),
         "transaction_costs": (
             "Transaction cost assumptions: "
             f"{config.costs.transaction_cost_bps:.2f} bps fees + "

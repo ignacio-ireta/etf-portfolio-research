@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from etf_portfolio.backtesting.engine import run_walk_forward_backtest
-from etf_portfolio.cli import _build_benchmark_suite
+from etf_portfolio.cli import _build_benchmark_suite, _report_assumptions
 from etf_portfolio.config import AppConfig
 
 
@@ -15,9 +15,11 @@ def make_dummy_returns() -> pd.DataFrame:
     )
 
 
-def test_rebalance_date_return_uses_previous_weights() -> None:
+def test_rebalance_date_return_uses_previous_weights(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     returns = make_dummy_returns()
-    rebalance_dates = [returns.index[2], returns.index[5]]
+    rebalance_dates = [returns.index[3], returns.index[6]]
 
     # Force a specific weight change
     weights_sequence = [
@@ -33,32 +35,26 @@ def test_rebalance_date_return_uses_previous_weights() -> None:
         idx += 1
         return res
 
-    monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr("etf_portfolio.backtesting.engine.optimize_portfolio", fake_optimize)
 
     result = run_walk_forward_backtest(
         returns,
         rebalance_dates=rebalance_dates,
-        lookback_periods=1,
+        lookback_periods=2,
         optimization_method="equal_weight",
     )
-    monkeypatch.undo()
 
-    # R1 = index[2]. Weights at R1 set to ETF1=1.0.
-    # But R1 return should NOT be included in this segment's returns.
-    # The first return in result.portfolio_returns should be index[3].
+    # R1 = index[3]. Weights at R1 set to ETF1=1.0, but the R1 return is
+    # not included in this new segment. The first realized return for those
+    # weights is strictly after R1.
+    assert result.portfolio_returns.index[0] == returns.index[4]
 
-    assert result.portfolio_returns.index[0] == returns.index[3]
+    # R2 = index[6]. Return at R2 remains in the previous holding period and
+    # is realized with the old ETF1=1.0 weights.
+    assert result.portfolio_returns.loc[returns.index[6]] == pytest.approx(0.01)
 
-    # R2 = index[5]. Weights at R2 set to ETF2=1.0.
-    # Return at index[5] should be realized with OLD weights (ETF1=1.0).
-    # ETF1 return at index[5] is 0.01.
-
-    assert result.portfolio_returns.loc[returns.index[5]] == pytest.approx(0.01)
-
-    # Return at index[6] should be realized with NEW weights (ETF2=1.0).
-    # ETF2 return at index[6] is 0.02.
-    assert result.portfolio_returns.loc[returns.index[6]] == pytest.approx(0.02)
+    # The first return strictly after R2 is realized with the new ETF2=1.0 weights.
+    assert result.portfolio_returns.loc[returns.index[7]] == pytest.approx(0.02)
 
 
 def test_benchmark_suite_aligns_rebalance_mode(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -91,10 +87,10 @@ def test_benchmark_suite_aligns_rebalance_mode(monkeypatch: pytest.MonkeyPatch) 
     }
     config = AppConfig.model_validate(config_dict)
 
-    captured_modes = []
+    captured_kwargs: list[dict[str, object]] = []
 
     def fake_run_backtest(*args, **kwargs):
-        captured_modes.append(kwargs.get("rebalance_mode"))
+        captured_kwargs.append(kwargs.copy())
         # Return a dummy result
         from etf_portfolio.backtesting.engine import WalkForwardBacktestResult
 
@@ -117,5 +113,61 @@ def test_benchmark_suite_aligns_rebalance_mode(monkeypatch: pytest.MonkeyPatch) 
     )
 
     # Should have called for 'min_variance' and 'Previous Optimized Strategy'
-    assert len(captured_modes) >= 2
-    assert all(mode == "contribution_only" for mode in captured_modes)
+    assert len(captured_kwargs) == 2
+    assert [kwargs["optimization_method"] for kwargs in captured_kwargs] == [
+        "min_volatility",
+        "equal_weight",
+    ]
+    assert all(kwargs["rebalance_mode"] == "contribution_only" for kwargs in captured_kwargs)
+    assert all(kwargs["contribution_amount"] == 1000.0 for kwargs in captured_kwargs)
+    assert all(kwargs["initial_capital"] == 100000.0 for kwargs in captured_kwargs)
+    assert all(
+        kwargs["transaction_cost_rate"] == pytest.approx(0.0015) for kwargs in captured_kwargs
+    )
+    assert all(kwargs["realized_constraint_policy"] == "report_drift" for kwargs in captured_kwargs)
+    assert all(kwargs["covariance_method"] == "sample" for kwargs in captured_kwargs)
+    assert all(kwargs["expected_return_method"] == "historical_mean" for kwargs in captured_kwargs)
+
+
+def test_report_assumptions_explain_benchmark_and_rebalance_semantics() -> None:
+    config = AppConfig.model_validate(
+        {
+            "project": {"name": "Test", "base_currency": "USD"},
+            "universe": {"tickers": ["ETF1", "ETF2"]},
+            "benchmark": {"primary": "BENCH", "secondary": {}},
+            "data": {
+                "provider": "yfinance",
+                "start_date": "2020-01-01",
+                "price_field": "adj_close",
+            },
+            "investor_profile": {
+                "horizon_years": 10,
+                "objective": "Growth",
+                "tax_preference": "None",
+            },
+            "optimization": {
+                "active_objective": "equal_weight",
+                "benchmark_objectives": ["min_variance"],
+                "risk_model": "sample",
+                "expected_return_estimator": "historical_mean",
+                "default_max_weight_per_etf": 1.0,
+            },
+            "constraints": {"asset_class_bounds": {}, "ticker_bounds": {}},
+            "rebalance": {
+                "mode": "contribution_only",
+                "frequency": "monthly",
+                "contribution_amount": 1000.0,
+                "realized_constraint_policy": "report_drift",
+            },
+            "backtest": {"initial_capital": 100000.0},
+            "costs": {"transaction_cost_bps": 10, "slippage_bps": 5},
+        }
+    )
+
+    assumptions = _report_assumptions(config, "equal_weight")
+
+    assert "returns strictly before each rebalance date" in assumptions["rebalance_execution"]
+    assert "return labeled with the rebalance date remains" in assumptions["rebalance_execution"]
+    assert "same rebalance mode (contribution_only)" in assumptions["benchmark_fairness"]
+    assert "contribution amount (1000.00)" in assumptions["benchmark_fairness"]
+    assert "not simulated with contribution-only drift" in assumptions["benchmark_return_series"]

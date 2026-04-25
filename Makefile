@@ -1,4 +1,14 @@
-.PHONY: sync test lint format check run handoff-bundle
+.PHONY: help sync test lint format check run handoff-bundle
+
+help:
+	@echo "Available targets:"
+	@echo "  sync           Install dependencies using uv"
+	@echo "  test           Run tests using pytest"
+	@echo "  lint           Run ruff check"
+	@echo "  format         Run ruff format"
+	@echo "  check          Run ruff check --fix, ruff format, and pytest"
+	@echo "  run            Run the full pipeline using configs/base.yaml"
+	@echo "  handoff-bundle Generate the handoff archive and manifest"
 
 sync:
 	uv sync --group dev

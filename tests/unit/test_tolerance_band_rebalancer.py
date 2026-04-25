@@ -65,6 +65,28 @@ def test_rebalance_to_band_edge_when_breached_above() -> None:
     assert decision.applied_weights.sum() == pytest.approx(1.0, abs=1e-9)
 
 
+def test_projection_keeps_ticker_inside_band_when_normalization_would_not() -> None:
+    target = pd.Series({"AAA": 0.01, "BBB": 0.89, "CCC": 0.10}, dtype=float)
+    previous = pd.Series({"AAA": 0.00, "BBB": 0.75, "CCC": 0.25}, dtype=float)
+    band = 0.02
+
+    decision = apply_rebalance_mode(
+        mode="tolerance_band",
+        previous_weights=previous,
+        target_weights=target,
+        portfolio_value=100_000.0,
+        contribution_amount=0.0,
+        tolerance_bands=_bands(per_ticker=band),
+    )
+
+    low = (target - band).clip(lower=0.0)
+    high = (target + band).clip(upper=1.0)
+    assert decision.rebalanced is True
+    assert decision.applied_weights.sum() == pytest.approx(1.0, abs=1e-9)
+    assert (decision.applied_weights >= low - 1e-9).all()
+    assert (decision.applied_weights <= high + 1e-9).all()
+
+
 def test_rebalance_to_band_edge_when_breached_below() -> None:
     target = pd.Series({"VTI": 0.50, "BND": 0.50}, dtype=float)
     previous = pd.Series({"VTI": 0.40, "BND": 0.60}, dtype=float)
@@ -109,6 +131,43 @@ def test_asset_class_band_can_trigger_rebalance() -> None:
     )
 
     assert decision.rebalanced is True
+
+
+def test_projection_fixes_asset_class_breach_without_ticker_breach() -> None:
+    target = pd.Series(
+        {"VTI": 0.25, "VEA": 0.25, "BND": 0.25, "IEF": 0.25},
+        dtype=float,
+    )
+    previous = pd.Series(
+        {"VTI": 0.29, "VEA": 0.29, "BND": 0.21, "IEF": 0.21},
+        dtype=float,
+    )
+    asset_classes = pd.Series(
+        {
+            "VTI": "equity",
+            "VEA": "equity",
+            "BND": "fixed_income",
+            "IEF": "fixed_income",
+        },
+        dtype=str,
+    )
+
+    decision = apply_rebalance_mode(
+        mode="tolerance_band",
+        previous_weights=previous,
+        target_weights=target,
+        portfolio_value=100_000.0,
+        contribution_amount=0.0,
+        tolerance_bands=_bands(per_ticker=0.05, per_class=0.05),
+        asset_classes=asset_classes,
+    )
+
+    class_weights = decision.applied_weights.groupby(asset_classes).sum()
+    assert decision.rebalanced is True
+    assert (abs(previous - target) <= 0.05).all()
+    assert class_weights["equity"] == pytest.approx(0.55, abs=1e-9)
+    assert class_weights["fixed_income"] == pytest.approx(0.45, abs=1e-9)
+    assert (abs(decision.applied_weights - target) <= 0.05 + 1e-9).all()
 
 
 def test_full_rebalance_pulls_to_target_exactly() -> None:

@@ -1,67 +1,7 @@
+Command: uv sync --group dev
+Working directory: /Users/astridlysheim/Projects/etf-portfolio-research
+Started UTC: 2026-04-25T03:10:48Z
 Resolved 132 packages in 2ms
-   Building etf-portfolio-research @ file:///Users/astridlysheim/Projects/etf-portfolio-research
-      Built etf-portfolio-research @ file:///Users/astridlysheim/Projects/etf-portfolio-research
-Prepared 1 package in 917ms
-Uninstalled 61 packages in 170ms
-Installed 1 package in 1ms
- - aiohttp-retry==2.9.1
- - amqp==5.3.1
- - antlr4-python3-runtime==4.9.3
- - appdirs==1.4.4
- - asyncssh==2.22.0
- - atpublic==7.0.0
- - billiard==4.2.4
- - celery==5.6.3
- - click-didyoumean==0.3.1
- - click-plugins==1.1.1.2
- - click-repl==0.3.0
- - colorama==0.4.6
- - configobj==5.0.9
- - dictdiffer==0.9.0
- - diskcache==5.6.3
- - distro==1.9.0
- - dpath==2.2.0
- - dulwich==1.2.0
- - dvc==3.67.1
- - dvc-data==3.18.3
- - dvc-http==2.32.0
- - dvc-objects==5.2.0
- - dvc-render==1.0.2
- - dvc-studio-client==0.22.0
- - dvc-task==0.40.2
- - entrypoints==0.4
- ~ etf-portfolio-research==0.1.0 (from file:///Users/astridlysheim/Projects/etf-portfolio-research)
- - filelock==3.29.0
- - flatten-dict==0.4.2
- - flufl-lock==9.0.0
- - fsspec==2026.3.0
- - funcy==2.0
- - grandalf==0.8
- - gto==1.9.0
- - hydra-core==1.3.2
- - iterative-telemetry==0.0.10
- - kombu==5.6.2
- - networkx==3.6.1
- - omegaconf==2.3.0
- - pathspec==1.1.0
- - prompt-toolkit==3.0.52
- - psutil==7.2.2
- - pydantic-settings==2.14.0
- - pydot==4.0.1
- - pygit2==1.19.2
- - pygtrie==2.5.0
- - ruamel-yaml==0.19.1
- - scmrepo==3.6.2
- - semver==3.0.4
- - shellingham==1.5.4
- - shortuuid==1.0.13
- - shtab==1.8.0
- - sqltrie==0.11.2
- - tabulate==0.10.0
- - tomlkit==0.14.0
- - tqdm==4.67.3
- - typer==0.24.2
- - tzlocal==5.3.1
- - vine==5.1.0
- - voluptuous==0.16.0
- - zc-lockfile==4.0
+Checked 128 packages in 2ms
+Finished UTC: 2026-04-25T03:10:48Z
+Exit code: 0

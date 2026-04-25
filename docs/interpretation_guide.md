@@ -69,7 +69,11 @@ The optimizer target is what the model wants. Realized holdings show what the si
 
 **Mistake: Assuming contribution-only rebalancing keeps constraints hard**
 
-Contribution-only rebalancing can allow drift because it avoids selling. Read realized constraint warnings.
+Contribution-only rebalancing can allow drift because it avoids selling. New cash goes to under-weight gaps first, but if the contribution is larger than all gaps, surplus cash is invested by target weights. Read realized constraint warnings.
+
+**Mistake: Treating tolerance-band mode as approximate**
+
+Tolerance-band mode is intended to be hard-band rebalancing. Once a ticker or asset-class band is breached, the engine projects realized weights back inside the configured ticker and available asset-class drift bands.
 
 **Mistake: Ignoring costs**
 

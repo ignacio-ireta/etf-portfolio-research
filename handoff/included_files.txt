@@ -49,6 +49,8 @@
 ./reports/runs/backtest_run-all-20260424T175044Z-3777911e.json
 ./reports/runs/backtest_run-all-20260424T223726Z-b15143d6.json
 ./reports/runs/backtest_run-all-20260425T011014Z-e4361d4e.json
+./reports/runs/backtest_run-all-20260425T030757Z-e0405b76.json
+./reports/runs/backtest_run-all-20260425T031057Z-a024d06f.json
 ./scripts/generate_handoff_bundle.py
 ./src/etf_portfolio/__init__.py
 ./src/etf_portfolio/backtesting/contributions.py
@@ -89,12 +91,14 @@
 ./tests/regression/test_ml_dataset_leakage.py
 ./tests/regression/test_no_lookahead_backtest.py
 ./tests/unit/test_attribution.py
+./tests/unit/test_backtest_interpretation.py
 ./tests/unit/test_backtesting_metrics.py
 ./tests/unit/test_cli_asset_class_constraints.py
 ./tests/unit/test_cli_pipeline.py
 ./tests/unit/test_config.py
 ./tests/unit/test_contribution_rebalancer.py
 ./tests/unit/test_data_ingestion.py
+./tests/unit/test_data_semantics.py
 ./tests/unit/test_estimators.py
 ./tests/unit/test_etf_universe_metadata_schema.py
 ./tests/unit/test_guided_examples_docs.py

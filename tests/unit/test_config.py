@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from etf_portfolio.config import (
     CrossCheckConfig,
+    MLConfig,
     RiskFreeConfig,
     config_to_dict,
     load_config,
@@ -61,6 +62,10 @@ def test_load_config_reads_revised_base_yaml() -> None:
     assert config.ml.target == "forward_return"
     assert config.ml.models == ["historical_mean", "ridge", "random_forest"]
     assert config.ml.governance.minimum_fold_win_rate == 0.6
+
+
+def test_ml_config_is_disabled_by_default() -> None:
+    assert MLConfig().enabled is False
 
 
 def test_load_config_files_deep_merges_overlays(tmp_path: Path) -> None:

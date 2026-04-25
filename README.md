@@ -130,13 +130,18 @@ The HTML report is generated from pipeline outputs, not notebook state.
 - `target_return` and `target_volatility` are available for optimizer/frontier internals, but they are not supported as run-config objectives in `configs/*.yaml`.
 - Backtests are walk-forward and use only trailing data before each rebalance date.
 - `backtest.start_date` and `backtest.end_date` are applied to aligned asset and benchmark return series before eligible rebalance dates are generated.
+- Target weights are estimated from returns strictly before each rebalance date. The return labeled with the rebalance date is realized by the previous weights; new weights and trade-cost impact start on the next return date.
 - In `contribution_only` mode, optimizer targets always honor configured caps. Realized holdings use `rebalance.realized_constraint_policy`: `report_drift` keeps HODL/no-sell behavior and reports drift violations, while `enforce_hard` permits sell-based fallback rebalances when realized caps are breached.
+- Contribution-only allocation never sells unless a fallback/hard-constraint policy is triggered. Cash is routed to under-weight gaps first; if a contribution exceeds all gaps, surplus cash is invested by target weights and can include previously over-weight assets.
+- In `tolerance_band` mode, ticker or asset-class band breaches trigger a constrained projection so realized weights satisfy the configured ticker and available asset-class drift bands around the optimizer target.
+- Optimized benchmark objectives use the same rebalance mode, contribution amount, initial capital, cost assumptions, constraints, and schedule as the main strategy. In a contribution-only run, they are contribution-only benchmark simulations, not full-rebalance theoretical portfolios.
+- The selected benchmark ETF and configured secondary allocation benchmarks are external/theoretical return-series baselines and do not model contribution-only drift or strategy transaction costs.
 - The report frontier uses the same constraint bundle as optimization and walk-forward backtesting: asset classes, asset-class bounds, ticker bounds, bond floor, and expense-ratio inputs are passed through consistently.
 - Backtest reporting separates optimizer targets from realized holdings. The Excel bundle includes `optimizer_target_portfolio` and `latest_realized_portfolio`, plus realized-constraint warnings when contribution-only drift breaches configured caps.
 - Transaction costs and slippage are modeled, but execution is still simplified relative to live trading.
 - Reporting is code-generated; notebooks are research interfaces only.
 - Metrics JSON is written as strict JSON: non-finite values are sanitized, NumPy scalars are unwrapped, pandas timestamps are serialized, and output is written with `allow_nan=False`.
-- ML exists in the repo, but governance gates decide whether a model is eligible for portfolio use.
+- ML is disabled by default (`ml.enabled: false`). Enabling it creates research artifacts only; the persisted model is labeled by training scope and remains gated by governance before any portfolio use.
 
 ## Documentation
 

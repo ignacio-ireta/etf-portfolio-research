@@ -4,9 +4,9 @@ Three rebalance modes are supported:
 
 * `full_rebalance` — trade to the optimizer target every period; assumes
   selling is allowed.
-* `tolerance_band` — only trade when realized drift exceeds the per-ticker
-  band; trades bring weights back to the band edge, not the optimizer target,
-  to minimize turnover.
+* `tolerance_band` — only trade when realized drift exceeds a configured
+  ticker or asset-class band; trades project weights to the nearest portfolio
+  that satisfies those bands, not necessarily the optimizer target.
 * `contribution_only` — never sell; route external `contribution_amount` cash
   to under-weight tickers via water-fill. Optional fallback selling can be
   enabled when drift breaches a configured threshold.
@@ -24,6 +24,7 @@ from typing import Literal
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import Bounds, LinearConstraint, minimize
 
 from etf_portfolio.backtesting.contributions import (
     CASH_CONSERVATION_TOLERANCE,
@@ -162,15 +163,14 @@ def _apply_tolerance_band(
     ticker_band = float(tolerance_bands.per_ticker_abs_drift)
     ticker_breach = drift_per_ticker.abs() > ticker_band
 
-    asset_class_breach = False
-    if asset_classes is not None:
-        ac_band = float(tolerance_bands.per_asset_class_abs_drift)
-        aligned_classes = asset_classes.reindex(target.index)
-        if not aligned_classes.isna().all():
-            current_class_weights = previous.groupby(aligned_classes).sum()
-            target_class_weights = target.groupby(aligned_classes).sum()
-            class_drift = (current_class_weights - target_class_weights).abs()
-            asset_class_breach = bool((class_drift > ac_band).any())
+    ac_band = float(tolerance_bands.per_asset_class_abs_drift)
+    aligned_classes = _align_asset_classes(asset_classes, target.index)
+    asset_class_breach = _asset_class_band_breached(
+        previous=previous,
+        target=target,
+        aligned_classes=aligned_classes,
+        asset_class_band=ac_band,
+    )
 
     if not ticker_breach.any() and not asset_class_breach:
         new_total = portfolio_value + contribution_amount
@@ -191,14 +191,13 @@ def _apply_tolerance_band(
             rebalanced=False,
         )
 
-    band_high = (target + ticker_band).clip(upper=1.0)
-    band_low = (target - ticker_band).clip(lower=0.0)
-    new_weights = previous.clip(lower=band_low, upper=band_high)
-    weight_sum = float(new_weights.sum())
-    if weight_sum <= 0.0:
-        new_weights = target.copy()
-    else:
-        new_weights = new_weights / weight_sum
+    new_weights = _project_to_tolerance_bands(
+        previous=previous,
+        target=target,
+        ticker_band=ticker_band,
+        asset_class_band=ac_band,
+        aligned_classes=aligned_classes,
+    )
 
     new_total = portfolio_value + contribution_amount
     previous_holdings = previous * portfolio_value
@@ -211,6 +210,91 @@ def _apply_tolerance_band(
         portfolio_value_after=new_total,
         rebalanced=True,
     )
+
+
+def _align_asset_classes(
+    asset_classes: pd.Series | None,
+    assets: pd.Index,
+) -> pd.Series | None:
+    if asset_classes is None:
+        return None
+    aligned = asset_classes.reindex(assets)
+    if aligned.isna().any():
+        missing_assets = list(aligned[aligned.isna()].index)
+        raise ValueError(
+            "asset_classes must contain entries for every asset in tolerance-band mode; "
+            f"missing={missing_assets}."
+        )
+    return aligned.astype(str)
+
+
+def _asset_class_band_breached(
+    *,
+    previous: pd.Series,
+    target: pd.Series,
+    aligned_classes: pd.Series | None,
+    asset_class_band: float,
+) -> bool:
+    if aligned_classes is None:
+        return False
+    current_class_weights = previous.groupby(aligned_classes).sum()
+    target_class_weights = target.groupby(aligned_classes).sum()
+    class_drift = (current_class_weights - target_class_weights).abs()
+    return bool((class_drift > asset_class_band).any())
+
+
+def _project_to_tolerance_bands(
+    *,
+    previous: pd.Series,
+    target: pd.Series,
+    ticker_band: float,
+    asset_class_band: float,
+    aligned_classes: pd.Series | None,
+) -> pd.Series:
+    assets = target.index
+    previous_values = previous.to_numpy(dtype=float)
+    target_values = target.to_numpy(dtype=float)
+    lower_bounds = np.clip(target_values - ticker_band, 0.0, 1.0)
+    upper_bounds = np.clip(target_values + ticker_band, 0.0, 1.0)
+
+    constraints: list[LinearConstraint] = [
+        LinearConstraint(np.ones((1, len(assets))), [1.0], [1.0])
+    ]
+    if aligned_classes is not None:
+        target_class_weights = target.groupby(aligned_classes).sum()
+        for asset_class, target_class_weight in target_class_weights.items():
+            mask = (aligned_classes == asset_class).astype(float).to_numpy()
+            constraints.append(
+                LinearConstraint(
+                    mask[None, :],
+                    [max(float(target_class_weight) - asset_class_band, 0.0)],
+                    [min(float(target_class_weight) + asset_class_band, 1.0)],
+                )
+            )
+
+    result = minimize(
+        fun=lambda weights: 0.5 * float(np.square(weights - previous_values).sum()),
+        x0=target_values,
+        jac=lambda weights: weights - previous_values,
+        bounds=Bounds(lower_bounds, upper_bounds),
+        constraints=constraints,
+        method="SLSQP",
+        options={"ftol": 1e-12, "maxiter": 200},
+    )
+    if not result.success:
+        raise RuntimeError(
+            "Tolerance-band projection failed even though the optimizer target should be "
+            f"feasible: {result.message}"
+        )
+
+    projected = pd.Series(result.x, index=assets, dtype=float)
+    projected[np.abs(projected) < 1e-12] = 0.0
+    total = float(projected.sum())
+    if not np.isclose(total, 1.0, atol=1e-8):
+        raise RuntimeError(
+            f"Tolerance-band projection produced weights that do not sum to 1.0: {total:.12f}."
+        )
+    return projected
 
 
 def _apply_contribution_only(

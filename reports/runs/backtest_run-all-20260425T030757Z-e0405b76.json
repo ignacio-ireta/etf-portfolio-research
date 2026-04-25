@@ -1,0 +1,185 @@
+{
+  "backtest_metrics": {
+    "Alpha": 0.019746,
+    "Annualized Volatility": 0.122686,
+    "Average Number of Holdings": 9.2,
+    "Best Month": 0.088194,
+    "Beta": 0.676628,
+    "CAGR": 0.104314,
+    "Calmar Ratio": 0.415348,
+    "Herfindahl Concentration Index": 0.235444,
+    "Information Ratio": -0.188469,
+    "Largest Position": 0.449638,
+    "Max Drawdown": -0.251149,
+    "Sharpe Ratio": 0.625822,
+    "Sortino Ratio": 0.874229,
+    "Tracking Error": 0.068529,
+    "Turnover": 0.021322,
+    "Worst Month": -0.082072,
+    "Worst Quarter": -0.143584
+  },
+  "benchmark": "VT",
+  "config_hash": "30d42ad4e96f429f58d7092859fd296cf4a623ff70a72159b8f80eae137d3c00",
+  "constraints": {
+    "asset_class_bounds": {
+      "commodity": {
+        "max": 0.15,
+        "min": 0.0
+      },
+      "equity": {
+        "max": 0.9,
+        "min": 0.5
+      },
+      "fixed_income": {
+        "max": 0.45,
+        "min": 0.1
+      },
+      "real_estate": {
+        "max": 0.1,
+        "min": 0.0
+      }
+    },
+    "ticker_bounds": {
+      "BND": {
+        "max": 0.4,
+        "min": 0.0
+      },
+      "GSG": {
+        "max": 0.1,
+        "min": 0.0
+      },
+      "IAU": {
+        "max": 0.15,
+        "min": 0.0
+      },
+      "IEI": {
+        "max": 0.3,
+        "min": 0.0
+      },
+      "QQQ": {
+        "max": 0.15,
+        "min": 0.0
+      },
+      "REMX": {
+        "max": 0.05,
+        "min": 0.0
+      },
+      "TIP": {
+        "max": 0.2,
+        "min": 0.0
+      },
+      "TLT": {
+        "max": 0.15,
+        "min": 0.0
+      },
+      "VEA": {
+        "max": 0.35,
+        "min": 0.05
+      },
+      "VNQ": {
+        "max": 0.1,
+        "min": 0.0
+      },
+      "VTI": {
+        "max": 0.6,
+        "min": 0.2
+      },
+      "VWO": {
+        "max": 0.2,
+        "min": 0.0
+      }
+    }
+  },
+  "data_version": {
+    "exists": true,
+    "path": "data/processed/returns.parquet",
+    "sha256": "7b1d94b90ef9c520a82b85fdd5ff2b17ad339b71c997c6cc25aa9e0bfcc42b9d"
+  },
+  "end_date": "2026-04-24",
+  "expected_return_estimator": "historical_mean",
+  "git_commit_hash": "4ad7dfd63a2d8e77fc4c6bdfb03d366303739334",
+  "optimization_method": "max_sharpe",
+  "output_artifacts": {
+    "figure_asset_class_exposure": {
+      "exists": true,
+      "path": "reports/figures/asset_class_exposure.png",
+      "sha256": "d13180f4931926db7062be887c01ba6b35354233c704755c8cb36f1cf7ed079c"
+    },
+    "figure_benchmark_comparison": {
+      "exists": true,
+      "path": "reports/figures/benchmark_comparison.png",
+      "sha256": "e827c278567cb6d1a04507aacc3b5d7e52fef4b41c9b006cd899d6d687d6c560"
+    },
+    "figure_cumulative_returns": {
+      "exists": true,
+      "path": "reports/figures/cumulative_returns.png",
+      "sha256": "dca5f081a76c84e436c5d372264e57d102ae6e6b7674e1ddc6dde5bcd3bb6221"
+    },
+    "figure_drawdown": {
+      "exists": true,
+      "path": "reports/figures/drawdown.png",
+      "sha256": "7de5058605e79ea827cbeac33e3747fcbe1214a178de69df5dca357da627eb15"
+    },
+    "figure_efficient_frontier": {
+      "exists": true,
+      "path": "reports/figures/efficient_frontier.png",
+      "sha256": "403d4b575db4d29ab56649a45369884d3e047647f19520e505c7f266f7a78299"
+    },
+    "figure_portfolio_weights": {
+      "exists": true,
+      "path": "reports/figures/portfolio_weights.png",
+      "sha256": "00fa00293dfabd6b0a32af3f27698775d6fbd636f69e1db3df2f3609646ca86f"
+    },
+    "figure_region_exposure": {
+      "exists": true,
+      "path": "reports/figures/region_exposure.png",
+      "sha256": "c41dd232dbdc61f0de754ba9eba0152b2510d667dfdca65d47adbbdfe11476c3"
+    },
+    "figure_rolling_correlation": {
+      "exists": true,
+      "path": "reports/figures/rolling_correlation.png",
+      "sha256": "e234b0b21d9b7ec1b2f80106fd61e5725f75eefb706880993f596e2a89b555b7"
+    },
+    "figure_rolling_sharpe": {
+      "exists": true,
+      "path": "reports/figures/rolling_sharpe.png",
+      "sha256": "fcbf8d44f74af39c91935bcbe9d8e967237071403efb5d34f716f678ce3ac59e"
+    },
+    "figure_rolling_volatility": {
+      "exists": true,
+      "path": "reports/figures/rolling_volatility.png",
+      "sha256": "54480fae8ac1bae99963ac2ba3a80c429cff634b2eb88927aa597b0c945ee320"
+    },
+    "figure_stress_periods": {
+      "exists": true,
+      "path": "reports/figures/stress_periods.png",
+      "sha256": "39c7503b7b07da9eefdb6e896974070327f4f065939ce2e390f10c874fd04c26"
+    },
+    "figure_weighted_expense_over_time": {
+      "exists": true,
+      "path": "reports/figures/weighted_expense_over_time.png",
+      "sha256": "72e32308de0ab69eae2027c380b3816b106caa651670560c0513db4800ce874f"
+    },
+    "metrics": {
+      "exists": true,
+      "path": "reports/metrics/backtest_metrics.json",
+      "sha256": "00d7b44ad804d5ee40938b86853ec075799b5a30c9714c1a7ca0c26dbf541900"
+    },
+    "report": {
+      "exists": true,
+      "path": "reports/html/latest_report.html",
+      "sha256": "00029fdd975e799fc6c296e615a7ecb1751c0522a591f3bcc835ac0e942d1caf"
+    },
+    "workbook": {
+      "exists": true,
+      "path": "reports/excel/portfolio_results.xlsx",
+      "sha256": "496563764b3e2e3f14fff510a01f62a1f6ff8c9fae7b0a66b623ecdc8abc2e1f"
+    }
+  },
+  "risk_model": "ledoit_wolf",
+  "run_id": "run-all-20260425T030757Z-e0405b76",
+  "stage": "backtest",
+  "start_date": "2015-02-02",
+  "timestamp_utc": "2026-04-25T03:08:35.594360+00:00",
+  "universe_id": "8befa22e708529d8"
+}

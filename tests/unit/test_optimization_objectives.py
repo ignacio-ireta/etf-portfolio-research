@@ -74,7 +74,9 @@ def test_max_sharpe_objective_handles_zero_volatility_safely() -> None:
         covariance_matrix=sigma,
         risk_free_rate=0.0,
     )
-    assert fn(np.array([0.5, 0.5])) == pytest.approx(1e9)
+    objective_value = fn(np.array([0.5, 0.5]))
+    assert np.isfinite(objective_value)
+    assert objective_value == pytest.approx(-70_000.0)
 
 
 def test_target_volatility_objective_maximizes_return() -> None:

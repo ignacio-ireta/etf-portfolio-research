@@ -33,6 +33,23 @@ def test_contribution_never_sells_overweight_tickers() -> None:
     assert trades["VTI"] == pytest.approx(0.0, abs=1e-9)
 
 
+def test_large_contribution_can_allocate_surplus_after_underweight_gaps_are_filled() -> None:
+    target = _equal_target()
+    previous = pd.Series({"VTI": 0.80, "BND": 0.10, "IAU": 0.10}, dtype=float)
+    portfolio_value = 100_000.0
+
+    trades = allocate_contribution(
+        previous_weights=previous,
+        target_weights=target,
+        cash_contribution=100_000.0,
+        portfolio_value=portfolio_value,
+    )
+
+    assert trades["BND"] > 0.0
+    assert trades["VTI"] > 0.0
+    assert trades.sum() == pytest.approx(100_000.0, abs=1e-8)
+
+
 def test_contribution_routes_capital_to_largest_underweight_first() -> None:
     target = _equal_target()
     previous = pd.Series({"VTI": 0.50, "BND": 0.40, "IAU": 0.10}, dtype=float)

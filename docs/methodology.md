@@ -87,26 +87,36 @@ Important limitation:
 
 ## Benchmark Fairness
 
-To ensure backtest comparisons are defensible, optimized benchmarks (such as Equal-Weight, Inverse-Volatility, or Min-Variance) are subject to the same operational constraints as the main strategy:
+To ensure backtest comparisons are defensible, optimized benchmarks (such as Equal-Weight, Inverse-Volatility, or Min-Variance) are subject to the same operational implementation as the main strategy:
 
 - **Shared Rebalance Mode:** If the main strategy uses `contribution_only`, optimized benchmarks also use `contribution_only`. This prevents benchmarks from having an "unfair" advantage of being able to sell to maintain risk targets if the user cannot.
 - **Shared Contribution Amount:** Any periodic external contribution added to the main strategy is also added to optimized benchmarks.
-- **Shared Operational Parameters:** Initial capital, transaction costs, slippage, and rebalance frequency are aligned across all optimized portfolios and benchmarks.
+- **Shared Operational Parameters:** Initial capital, transaction costs, slippage, constraints, realized constraint policy, and rebalance frequency are aligned across all optimized portfolios and optimized benchmark objectives.
 
-Constant-weight benchmarks (like 60/40 or single ETFs) remain as theoretical ideal baselines and do not model transaction costs or drift between rebalance dates unless otherwise noted.
+The chosen project policy is therefore to compare contribution-only implementation against contribution-only optimized benchmarks, not against full-rebalance theoretical optimized benchmarks.
+
+Constant-weight benchmarks (like 60/40, configured secondary allocation benchmarks, or single ETFs) remain theoretical return-series baselines. They do not model contribution-only drift, strategy transaction costs, or rebalance-date implementation mechanics unless a future config explicitly adds those assumptions.
 
 ## Execution Timing Assumptions
 
-The backtest engine assumes **End-of-Day Execution**:
+The backtest engine uses conservative rebalance-date semantics:
 
-1. **Information Cutoff:** At the close of `rebalance_date` (T), the optimizer calculates new target weights using data available up to and including T.
-2. **Execution:** Trades are assumed to execute at the close of T.
-3. **Transaction Costs:** Costs and slippage for those trades are subtracted from the *first day* of the new period (T+1).
-4. **Realized Returns:**
-   - The return on `rebalance_date` (T) is realized using the **old** weights (from the previous period).
-   - The returns starting from the next day (T+1) are realized using the **new** weights (applied at T close).
+1. **Information Cutoff:** For a `rebalance_date` (T), the optimizer calculates new target weights using returns strictly before T. The return interval labeled T is not used to set weights for T.
+2. **Realization On T:** The return labeled T is realized by the previous period's weights.
+3. **Execution:** Trades are assumed after the T return interval, so the newly applied weights affect returns strictly after T.
+4. **Transaction Costs:** Costs and slippage for those trades are subtracted from the first post-rebalance return date.
+5. **Realized Returns:** The portfolio return series for a newly selected weight vector starts strictly after that weight vector's `rebalance_date`.
 
-This approach avoids lookahead bias by ensuring the weights applied to a return were determined strictly before that return was realized.
+This approach avoids lookahead bias by ensuring the weights applied to a return were determined before that return was realized.
+
+## Rebalancing Guarantees
+
+Tolerance-band rebalancing is constraint-safe for the configured drift bands. When a ticker or asset-class band is breached, the engine solves a constrained projection to the nearest long-only portfolio that sums to 1.0 and satisfies:
+
+- every ticker weight within `target_weight +/- rebalance.tolerance_bands.per_ticker_abs_drift`
+- every available asset-class exposure within `target_class_weight +/- rebalance.tolerance_bands.per_asset_class_abs_drift`
+
+Contribution-only rebalancing has a different guarantee. It never sells unless an explicit sell fallback or hard-constraint policy is triggered. New cash is first routed toward under-weight positions. If the contribution is larger than all under-weight gaps, the surplus is invested proportionally to target weights, so a previously over-weight ticker may still receive part of that surplus. Under `realized_constraint_policy: report_drift`, realized holdings can remain outside configured caps and are reported as drift warnings rather than forcibly sold.
 
 ## Risk Metrics
 
@@ -166,4 +176,4 @@ Artifact conventions:
 - The metadata validation schema is stricter than the raw CSV storage layout; ingestion currently selects only the schema-required columns.
 - Backtests are end-of-period and do not model intraday execution, taxes, or market impact.
 - FX-adjusted returns, MXN/NOK reporting layers, UCITS comparisons, and tax-aware domicile analysis are not implemented yet.
-- ML exists, but portfolio use should remain gated by out-of-sample evidence and governance approval.
+- ML is disabled by default. When explicitly enabled, the persisted research model is trained on the chronological train split and labeled `train_split`; the final test window remains held out for evaluation and governance. Portfolio use remains gated by out-of-sample evidence and governance approval.

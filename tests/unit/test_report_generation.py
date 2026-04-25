@@ -125,6 +125,12 @@ def test_generate_report_bundle_creates_expected_artifacts(tmp_path) -> None:
     assert "Exposure" in report_html
     assert "Weighted Expense Ratio Over Time" in report_html
     assert "Assumptions and Limitations" in report_html
+    assert "new weights and trade-cost impact start on the next return date" in report_html
+    assert "Pipeline optimized benchmark objectives use the same rebalance mode" in report_html
+    assert (
+        "single-ETF and fixed-allocation benchmarks are theoretical return-series baselines"
+        in report_html
+    )
     assert "Realized Constraint Warnings" in report_html
     assert "Synthetic dataset for smoke testing." in report_html
     assert "Past performance does not guarantee future results." in report_html
@@ -142,6 +148,10 @@ def test_generate_report_bundle_creates_expected_artifacts(tmp_path) -> None:
     assert "metric_dictionary" in workbook.sheet_names
     assert "optimized_portfolio" not in workbook.sheet_names
     assert "realized_constraint_warnings" in workbook.sheet_names
+    workbook_assumptions = pd.read_excel(artifacts.workbook_path, sheet_name="assumptions")
+    assumption_text = "\n".join(workbook_assumptions["value"].astype(str))
+    assert "new weights and trade-cost impact start on the next return date" in assumption_text
+    assert "Pipeline optimized benchmark objectives use the same rebalance mode" in assumption_text
 
 
 def test_generate_report_bundle_passes_constraint_bundle_to_frontier(monkeypatch, tmp_path) -> None:

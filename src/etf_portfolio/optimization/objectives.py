@@ -85,10 +85,9 @@ def _negative_sharpe_objective(
     risk_free_rate: float,
 ) -> ObjectiveFn:
     def negative_sharpe(weights: np.ndarray) -> float:
-        portfolio_variance = max(float(weights.T.dot(sigma).dot(weights)), 0.0)
-        portfolio_vol = float(np.sqrt(portfolio_variance))
-        if np.isclose(portfolio_vol, 0.0):
-            return 1e9
+        portfolio_variance = float(weights.T.dot(sigma).dot(weights))
+        # Use a small epsilon to keep the objective differentiable and avoid division by zero.
+        portfolio_vol = np.sqrt(max(portfolio_variance, 1e-12))
         portfolio_return = float(weights.dot(mu))
         return -float((portfolio_return - risk_free_rate) / portfolio_vol)
 

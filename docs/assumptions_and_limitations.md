@@ -73,11 +73,11 @@ An optimized portfolio is not automatically better than a simple portfolio. It i
 
 The project uses walk-forward backtesting, which helps reduce lookahead bias by using only trailing data before each rebalance date.
 
-The backtest assumes **End-of-Day Execution**:
+The backtest uses conservative rebalance-date execution semantics:
 
-- **Timing:** Rebalancing occurs at the close of the rebalance date. Data up to and including that date is used for decision-making.
-- **Realization:** The return on the rebalance date itself is realized using the *previous* weights. The new weights apply to returns starting from the following day.
-- **Costs:** Transaction costs and slippage are subtracted from the portfolio value on the first day of the new period.
+- **Information cutoff:** Target weights for `rebalance_date` are estimated using returns strictly before that date.
+- **Realization:** The return labeled with the rebalance date itself is realized using the previous weights. The new weights apply to returns strictly after the rebalance date.
+- **Costs:** Transaction costs and slippage are subtracted from the portfolio value on the first post-rebalance return date.
 
 Even with walk-forward design, the backtest still assumes:
 
@@ -97,11 +97,19 @@ The default configuration uses contribution-only rebalancing. This means new cas
 
 This can be useful for tax-aware or long-horizon accumulation scenarios, but it also means realized holdings can drift away from optimizer targets.
 
+Contribution-only allocation never sells unless an explicit fallback or hard-constraint policy is triggered. It routes cash toward under-weight gaps first. If the contribution exceeds all under-weight gaps, surplus cash is invested proportionally to target weights, so an over-weight asset can still receive part of that surplus.
+
+Tolerance-band mode is stricter: when a ticker or asset-class drift band is breached, the engine projects to a long-only portfolio that sums to 1.0 and satisfies the configured ticker and available asset-class bands around the optimizer target.
+
 If realized constraint warnings appear, interpret the actual simulated portfolio using the realized holdings, not only the optimizer target.
 
 ## Benchmark Assumptions
 
 Benchmark choice strongly affects interpretation.
+
+Optimized benchmark objectives, such as equal-weight, inverse-volatility, minimum-variance, maximum-Sharpe, and risk-parity benchmarks, use the same rebalance mode, contribution amount, initial capital, cost assumptions, constraints, and rebalance schedule as the main strategy. In a `contribution_only` run, those optimized benchmarks are also contribution-only simulations rather than full-rebalance theoretical portfolios.
+
+The selected benchmark ETF and configured secondary allocation benchmarks are external/theoretical return-series baselines. They do not model contribution-only drift or strategy transaction costs.
 
 A good benchmark should be:
 
@@ -149,7 +157,9 @@ These issues can dominate real-world portfolio outcomes.
 
 ## Machine Learning Limitations
 
-The repository contains an ML research layer, but ML models are not automatically approved for portfolio construction.
+The repository contains an ML research layer, but ML is disabled by default and models are not automatically approved for portfolio construction.
+
+When ML is explicitly enabled, the persisted research model artifact is labeled by training scope. The default artifact is trained on the chronological train split, leaving the final test window held out for evaluation and governance rather than silently refitting on all eligible data.
 
 Any model used for portfolio decisions should pass governance checks, including:
 

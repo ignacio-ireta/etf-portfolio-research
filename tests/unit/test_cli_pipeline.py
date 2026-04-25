@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import pickle
 import subprocess
 from pathlib import Path
 
@@ -61,7 +62,7 @@ def test_cli_pipeline_stages_create_expected_artifacts(
     assert (tmp_path / "reports/runs").exists()
     assert (tmp_path / "reports/ml/dataset.parquet").exists()
     assert (tmp_path / "reports/ml/predictions.parquet").exists()
-    assert (tmp_path / "reports/ml/model.pkl").exists()
+    assert (tmp_path / "reports/ml/model_train_split.pkl").exists()
     assert (tmp_path / "reports/ml/governance.json").exists()
     assert (tmp_path / "reports/ml/model_card.md").exists()
     assert (tmp_path / "reports/ml/metrics.json").exists()
@@ -111,11 +112,20 @@ def test_cli_pipeline_stages_create_expected_artifacts(
     assert "Assumptions and Limitations" in latest_report_html
     assert "Default maximum ETF weight: 50.00%" in latest_report_html
     assert "Maximum ETF weight: 50.00%" not in latest_report_html
+    assert "same rebalance mode (contribution_only)" in latest_report_html
+    assert "return labeled with the rebalance date remains" in latest_report_html
+    assert "external/theoretical return-series baselines" in latest_report_html
 
     ml_metrics_text = (tmp_path / "reports/ml/metrics.json").read_text(encoding="utf-8")
     assert "NaN" not in ml_metrics_text
     ml_metrics_payload = json.loads(ml_metrics_text)
     assert ml_metrics_payload["run_id"].startswith("ml-")
+    assert ml_metrics_payload["model_artifact"] == "reports/ml/model_train_split.pkl"
+    assert ml_metrics_payload["model_training_scope"] == "train_split"
+    assert (
+        "final test window remains held out"
+        in ml_metrics_payload["model_training_scope_description"]
+    )
     assert Path(ml_metrics_payload["run_record"]).exists()
     assert not Path(ml_metrics_payload["run_record"]).is_absolute()
     ml_run_record = json.loads(
@@ -127,8 +137,39 @@ def test_cli_pipeline_stages_create_expected_artifacts(
         artifact_path = Path(artifact["path"])
         assert not artifact_path.is_absolute()
         assert (tmp_path / artifact_path).exists()
+        assert artifact["sha256"] == file_sha256(tmp_path / artifact_path)
     assert ml_metrics_payload["governance"]["approval_status"] in {"eligible", "research_only"}
     assert "passes_leakage_checks" in ml_metrics_payload["governance"]["checks"]
+    model_payload = pickle.loads((tmp_path / "reports/ml/model_train_split.pkl").read_bytes())
+    assert model_payload["metadata"]["run_id"] == ml_metrics_payload["run_id"]
+    assert model_payload["metadata"]["training_scope"] == "train_split"
+    assert model_payload["metadata"]["training_observations"] > 0
+    assert model_payload["metadata"]["holdout_observations"] > 0
+    model_card_text = (tmp_path / "reports/ml/model_card.md").read_text(encoding="utf-8")
+    assert model_card_text.startswith(f"# Model Card: {ml_metrics_payload['run_id']}")
+    assert "- Model artifact: reports/ml/model_train_split.pkl" in model_card_text
+    assert "- Training scope: train_split" in model_card_text
+
+
+def test_direct_run_ml_uses_stage_run_id_in_model_card(tmp_path: Path, monkeypatch) -> None:
+    _write_project_files(tmp_path)
+    _initialize_git_repo(tmp_path)
+    prices = _make_prices()
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "build_price_provider", lambda config: FakePriceProvider(prices))
+
+    assert cli.main(["ingest", "--config", "configs/base.yaml"]) == 0
+    assert cli.main(["validate", "--config", "configs/base.yaml"]) == 0
+    assert cli.main(["features", "--config", "configs/base.yaml"]) == 0
+
+    artifacts = cli.run_ml("configs/base.yaml", project_root=tmp_path)
+
+    metrics_payload = json.loads(artifacts["metrics"].read_text(encoding="utf-8"))
+    model_card_text = artifacts["model_card"].read_text(encoding="utf-8")
+    assert metrics_payload["run_id"].startswith("ml-")
+    assert model_card_text.startswith(f"# Model Card: {metrics_payload['run_id']}")
+    assert "# Model Card: None" not in model_card_text
 
 
 def test_run_all_executes_reproducible_cli_pipeline(tmp_path: Path, monkeypatch) -> None:

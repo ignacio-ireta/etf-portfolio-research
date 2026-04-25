@@ -504,7 +504,6 @@ def _log_optimizer_completion(
         ticker_bound_count=len(ticker_bounds or {}),
         tightest_ticker_cap=_tightest_ticker_cap(ticker_bounds),
         realized_largest_weight=float(weights.max()),
-        max_weight=float(weights.max()),
         weight_sum=float(weights.sum()),
     )
 

@@ -46,8 +46,10 @@ A model is eligible for portfolio construction only if it:
 Current repository status:
 
 - ML pipeline exists
+- ML is disabled by default in code and base configuration
 - MLflow logging is supported when available
 - governance artifacts are generated
+- persisted model artifacts must state whether they were trained on the chronological train split or all eligible data
 - approval remains conditional, not automatic
 
 If a concrete model is promoted, this file should be extended with:

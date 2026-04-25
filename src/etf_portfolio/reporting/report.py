@@ -1353,7 +1353,13 @@ _DEFAULT_ASSUMPTIONS: tuple[tuple[str, str], ...] = (
     ),
     (
         "no_lookahead",
-        "Walk-forward backtest only uses returns observed strictly before each rebalance date.",
+        "Walk-forward backtest estimates target weights only with returns observed strictly "
+        "before each rebalance date.",
+    ),
+    (
+        "execution_timing",
+        "The return labeled with a rebalance date belongs to the previous holding period; "
+        "new weights and trade-cost impact start on the next return date.",
     ),
     (
         "costs",
@@ -1361,8 +1367,15 @@ _DEFAULT_ASSUMPTIONS: tuple[tuple[str, str], ...] = (
     ),
     (
         "rebalancing",
-        "Default rebalance mode is contribution-only with optional band-edge selling "
-        "above the configured drift threshold.",
+        "Contribution-only mode avoids selling unless fallback or hard-constraint policies "
+        "trigger; tolerance-band mode uses constrained projection when configured drift "
+        "bands are breached.",
+    ),
+    (
+        "benchmark_fairness",
+        "Pipeline optimized benchmark objectives use the same rebalance mode, contribution "
+        "amount, initial capital, costs, constraints, and schedule as the main strategy; "
+        "single-ETF and fixed-allocation benchmarks are theoretical return-series baselines.",
     ),
     (
         "optimization",

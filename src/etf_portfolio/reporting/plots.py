@@ -437,7 +437,18 @@ def build_group_exposure_pie_figure(
             )
         ]
     )
-    figure.update_layout(title=title, template="plotly_white")
+    figure.update_layout(
+        title={"text": title, "x": 0.5, "xanchor": "center"},
+        template="plotly_white",
+        margin={"l": 32, "r": 32, "t": 72, "b": 88},
+        legend={
+            "orientation": "h",
+            "x": 0.5,
+            "xanchor": "center",
+            "y": -0.08,
+            "yanchor": "top",
+        },
+    )
     return figure
 
 

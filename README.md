@@ -20,10 +20,11 @@ If you are new to the project or to portfolio analytics, start with the beginner
 3. [Metric Dictionary](docs/metric_dictionary.md)
 4. [Trust And Safety](docs/trust_and_safety.md)
 5. [Guided Examples](docs/guided_examples.md)
-6. [How To Read The Report](docs/how_to_read_the_report.md)
-7. [Interpretation Guide](docs/interpretation_guide.md)
-8. [Assumptions And Limitations](docs/assumptions_and_limitations.md)
-9. [Architecture](docs/architecture.md)
+6. [Configuration Reference](docs/configuration_reference.md)
+7. [How To Read The Report](docs/how_to_read_the_report.md)
+8. [Interpretation Guide](docs/interpretation_guide.md)
+9. [Assumptions And Limitations](docs/assumptions_and_limitations.md)
+10. [Architecture](docs/architecture.md)
 
 The main generated output to read first is:
 
@@ -66,6 +67,9 @@ uv run etf-portfolio backtest --config configs/base.yaml
 uv run etf-portfolio report --config configs/base.yaml
 uv run etf-portfolio run-all --config configs/base.yaml
 ```
+
+For all CLI flags and configurable YAML parameters, see the
+[Configuration Reference](docs/configuration_reference.md).
 
 Make targets:
 
@@ -162,6 +166,7 @@ The HTML report is generated from pipeline outputs, not notebook state.
 - [Metric Dictionary](docs/metric_dictionary.md)
 - [Trust And Safety](docs/trust_and_safety.md)
 - [Guided Examples](docs/guided_examples.md)
+- [Configuration Reference](docs/configuration_reference.md)
 - [How To Read The Report](docs/how_to_read_the_report.md)
 - [Interpretation Guide](docs/interpretation_guide.md)
 - [Assumptions And Limitations](docs/assumptions_and_limitations.md)

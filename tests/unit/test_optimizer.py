@@ -346,6 +346,34 @@ def test_optimizer_retries_alternate_initial_weights(
     assert weights.sum() == pytest.approx(1.0, abs=1e-8)
 
 
+def test_optimizer_accepts_feasible_max_sharpe_line_search_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeResult:
+        def __init__(self, x: list[float]) -> None:
+            self.success = False
+            self.x = x
+            self.message = "Positive directional derivative for linesearch"
+            self.status = 8
+
+    def fake_minimize(*args, **kwargs):
+        return FakeResult(kwargs["x0"].tolist())
+
+    monkeypatch.setattr("etf_portfolio.optimization.optimizer.minimize", fake_minimize)
+
+    weights = optimize_portfolio(
+        make_expected_returns(),
+        make_covariance_matrix(),
+        method="max_sharpe",
+        max_weight=0.65,
+        risk_free_rate=0.02,
+    )
+
+    assert weights.sum() == pytest.approx(1.0, abs=1e-8)
+    assert (weights >= -1e-8).all()
+    assert (weights <= 0.65 + 1e-8).all()
+
+
 def test_optimizer_respects_ticker_max_bound_for_remx() -> None:
     weights = optimize_portfolio(
         make_expected_returns(),

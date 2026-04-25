@@ -522,6 +522,11 @@ def generate_html_report(
       gap: 1.25rem;
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     }}
+    .stack {{
+      display: grid;
+      gap: 1.25rem;
+      grid-template-columns: minmax(0, 1fr);
+    }}
     .section-explanation {{
       background: #f8f2e9;
       border-left: 4px solid var(--accent);
@@ -565,8 +570,34 @@ def generate_html_report(
       margin: 0;
       padding-left: 1.2rem;
     }}
+    .table-scroll {{
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }}
+    .table-scroll table {{
+      min-width: 100%;
+      width: max-content;
+    }}
+    .figure-block {{
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }}
     .figure-block > div {{
       min-height: 360px;
+      min-width: 680px;
+    }}
+    .plotly-graph-div {{
+      max-width: 100%;
+    }}
+    @media (max-width: 760px) {{
+      .card-inner {{
+        padding: 1rem;
+      }}
+      .figure-block > div {{
+        min-width: 760px;
+      }}
     }}
   </style>
 </head>
@@ -832,11 +863,11 @@ def _build_report_sections(
                     _figure_html(figures["region_exposure"]),
                 ]
             )
-        sections.append(("Exposure", _combine_blocks(exposure_blocks)))
+        sections.append(("Exposure", _stack_blocks(exposure_blocks)))
     sections.append(
         (
             "Benchmark Comparison",
-            _combine_blocks(
+            _stack_blocks(
                 [
                     _table_html(metrics_table),
                     _figure_html(figures["benchmark_comparison"]),
@@ -848,7 +879,7 @@ def _build_report_sections(
         [
             (
                 "Backtest Performance",
-                _combine_blocks(
+                _stack_blocks(
                     [
                         _table_html(metrics_table),
                         _figure_html(figures["cumulative_returns"]),
@@ -868,7 +899,7 @@ def _build_report_sections(
             ),
             (
                 "Stress Periods",
-                _combine_blocks(
+                _stack_blocks(
                     [
                         _table_html(stress_table),
                         _figure_html(figures["stress_periods"]),
@@ -1286,7 +1317,7 @@ def _write_figure_exports(
 
 
 def _table_html(table: pd.DataFrame) -> str:
-    return table.to_html(index=False, border=0, na_rep="")
+    return f'<div class="table-scroll">{table.to_html(index=False, border=0, na_rep="")}</div>'
 
 
 def _figure_html(figure: Figure) -> str:
@@ -1304,6 +1335,15 @@ def _combine_blocks(blocks: list[str]) -> str:
         if block
     )
     return f'<div class="grid">{cards}</div>'
+
+
+def _stack_blocks(blocks: list[str]) -> str:
+    cards = "".join(
+        f'<div class="card"><div class="card-inner">{block}</div></div>'
+        for block in blocks
+        if block
+    )
+    return f'<div class="stack">{cards}</div>'
 
 
 def _bullet_list_html(items: Any) -> str:

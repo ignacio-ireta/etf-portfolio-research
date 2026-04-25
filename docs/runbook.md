@@ -26,6 +26,7 @@ Primary generated outputs:
 - `reports/runs/*.json`
 
 For reproducible beginner walkthroughs using the current generated artifacts, see [Guided Examples](guided_examples.md).
+For a complete list of CLI flags and YAML parameters that can be tweaked per run, see [Configuration Reference](configuration_reference.md).
 
 Current workbook/report layout:
 

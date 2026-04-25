@@ -28,6 +28,7 @@ from etf_portfolio.optimization.constraints import (
     build_linear_constraints,
     build_nonlinear_constraints,
     check_linear_feasibility,
+    validate_linear_feasibility,
 )
 from etf_portfolio.optimization.objectives import build_objective_function
 
@@ -87,6 +88,9 @@ def optimize_portfolio(
         long_only=long_only,
         target_return=target_return,
         target_volatility=target_volatility,
+        default_max_weight=max_weight,
+        ticker_bound_count=len(ticker_bounds or {}),
+        tightest_ticker_cap=_tightest_ticker_cap(ticker_bounds),
     )
     assets, mu, sigma = _validate_inputs(
         expected_returns=expected_returns,
@@ -123,6 +127,7 @@ def optimize_portfolio(
         expense_ratios=expense_ratios,
         max_expense_ratio=max_expense_ratio,
     )
+    validate_linear_feasibility(bounds=bounds, constraints=linear_constraints)
     initial_weights = _initial_weights(
         assets=assets,
         covariance_matrix=sigma,
@@ -155,6 +160,8 @@ def optimize_portfolio(
             risk_free_rate=risk_free_rate,
             method=validated_method,
             solver_used="direct_equal_weight",
+            default_max_weight=max_weight,
+            ticker_bounds=ticker_bounds,
         )
         return weights
 
@@ -195,7 +202,9 @@ def optimize_portfolio(
             status_code=getattr(result, "status", None),
             target_return=target_return,
             target_volatility=target_volatility,
-            max_weight=max_weight,
+            default_max_weight=max_weight,
+            ticker_bound_count=len(ticker_bounds or {}),
+            tightest_ticker_cap=_tightest_ticker_cap(ticker_bounds),
         )
         raise ValueError(f"Optimization failed: {result.message}")
 
@@ -208,6 +217,8 @@ def optimize_portfolio(
         risk_free_rate=risk_free_rate,
         method=validated_method,
         solver_used=DEFAULT_SOLVER,
+        default_max_weight=max_weight,
+        ticker_bounds=ticker_bounds,
     )
     return weights
 
@@ -418,6 +429,15 @@ def _weights_within_bounds(weights: np.ndarray, bounds: Any) -> bool:
     )
 
 
+def _tightest_ticker_cap(
+    ticker_bounds: Mapping[str, tuple[float | None, float | None]] | None,
+) -> float | None:
+    if not ticker_bounds:
+        return None
+    caps = [float(bounds[1]) for bounds in ticker_bounds.values() if bounds[1] is not None]
+    return min(caps) if caps else None
+
+
 def summarize_constraints(
     weights: pd.Series,
     *,
@@ -461,6 +481,8 @@ def _log_optimizer_completion(
     risk_free_rate: float,
     method: OptimizationMethod,
     solver_used: str,
+    default_max_weight: float,
+    ticker_bounds: Mapping[str, tuple[float | None, float | None]] | None,
 ) -> None:
     portfolio_return = calculate_portfolio_return(weights, expected_returns)
     portfolio_volatility = calculate_portfolio_volatility(weights, covariance_matrix)
@@ -478,6 +500,10 @@ def _log_optimizer_completion(
             portfolio_volatility,
             risk_free_rate,
         ),
+        default_max_weight=default_max_weight,
+        ticker_bound_count=len(ticker_bounds or {}),
+        tightest_ticker_cap=_tightest_ticker_cap(ticker_bounds),
+        realized_largest_weight=float(weights.max()),
         max_weight=float(weights.max()),
         weight_sum=float(weights.sum()),
     )

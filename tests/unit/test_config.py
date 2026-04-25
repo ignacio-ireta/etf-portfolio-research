@@ -103,6 +103,10 @@ constraints:
     fixed_income:
       min: 0.10
       max: 0.50
+  ticker_bounds:
+    BND:
+      min: 0.00
+      max: 0.70
 rebalance:
   mode: contribution_only
   frequency: monthly
@@ -168,6 +172,7 @@ ml:
     assert config.optimization.active_objective == "max_sharpe"
     assert config.optimization.benchmark_objectives == ["equal_weight"]
     assert config.constraints.asset_class_bounds["fixed_income"].max == 0.5
+    assert set(config.constraints.ticker_bounds) == {"VTI", "IAU"}
     assert config.constraints.ticker_bounds["VTI"].max == 0.30
     assert config.constraints.ticker_bounds["IAU"].max == 0.10
     assert config.rebalance.fallback_sell_allowed is False
@@ -299,6 +304,40 @@ ml:
 
     assert config.optimization.default_max_weight_per_etf == 0.25
     assert config.constraints.ticker_bounds["VTI"].max == 0.60
+
+
+def test_load_config_rejects_ticker_bounds_outside_universe(tmp_path: Path) -> None:
+    config_path = tmp_path / "unknown_ticker_bound.yaml"
+    config_text = Path("configs/base.yaml").read_text(encoding="utf-8")
+    config_path.write_text(
+        config_text.replace(
+            "  ticker_bounds:\n",
+            "  ticker_bounds:\n    MISSING:\n      min: 0.00\n      max: 0.10\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="constraints.ticker_bounds contains tickers"):
+        load_config(config_path)
+
+
+def test_load_config_rejects_target_return_and_target_volatility_keys(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "unsupported_target_objective.yaml"
+    config_text = Path("configs/base.yaml").read_text(encoding="utf-8")
+    config_path.write_text(
+        config_text.replace(
+            "  active_objective: max_sharpe\n",
+            "  target_return: 0.08\n  target_volatility: 0.12\n  active_objective: max_sharpe\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="not supported in run config files"):
+        load_config(config_path)
 
 
 def test_load_config_rejects_invalid_benchmark_mix_weights(tmp_path: Path) -> None:

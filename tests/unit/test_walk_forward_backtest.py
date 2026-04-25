@@ -60,9 +60,12 @@ def test_walk_forward_applies_transaction_costs_on_rebalance() -> None:
     monkeypatch.undo()
 
     first_rebalance_date = result.rebalance_summary.index[0]
+    # The first return after rebalance is the one where costs are applied
+    first_return_date = returns.index[returns.index > first_rebalance_date][0]
+
     first_weights = result.weights.loc[first_rebalance_date]
-    gross_return = returns.loc[first_rebalance_date].dot(first_weights)
-    net_return = result.portfolio_returns.loc[first_rebalance_date]
+    gross_return = returns.loc[first_return_date].dot(first_weights)
+    net_return = result.portfolio_returns.loc[first_return_date]
     summary = result.rebalance_summary.loc[first_rebalance_date]
 
     assert summary["transaction_cost_dollars"] == pytest.approx(0.01)
@@ -290,8 +293,11 @@ def test_contribution_only_transaction_costs_use_actual_dollar_trades(
     second_rebalance_date = result.rebalance_summary.index[1]
     second_summary = result.rebalance_summary.loc[second_rebalance_date]
     second_trades = result.trades_dollars.loc[second_rebalance_date]
-    gross_return = returns.loc[second_rebalance_date].dot(result.weights.loc[second_rebalance_date])
-    net_return = result.portfolio_returns.loc[second_rebalance_date]
+
+    # First return after second rebalance
+    second_return_date = returns.index[returns.index > second_rebalance_date][0]
+    gross_return = returns.loc[second_return_date].dot(result.weights.loc[second_rebalance_date])
+    net_return = result.portfolio_returns.loc[second_return_date]
 
     assert (second_trades >= 0.0).all()
     assert second_trades.sum() == pytest.approx(contribution)

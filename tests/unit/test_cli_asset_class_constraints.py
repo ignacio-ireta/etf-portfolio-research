@@ -34,9 +34,16 @@ def test_asset_class_bounds_raise_when_configured_classes_match_no_metadata() ->
 
     with pytest.raises(
         ValueError,
-        match="do not match any metadata asset_class values",
+        match="unknown asset_class values",
     ):
         cli._asset_class_bounds(config, fake_classes)
+
+
+def test_ticker_bounds_raise_for_missing_available_columns() -> None:
+    config = load_config("configs/base.yaml")
+
+    with pytest.raises(ValueError, match="unknown tickers"):
+        cli._ticker_bounds(config, pd.Index(["VTI", "BND", "VNQ", "REMX"]))
 
 
 def test_build_optimization_constraints_returns_shared_constraint_bundle() -> None:
@@ -48,29 +55,24 @@ def test_build_optimization_constraints_returns_shared_constraint_bundle() -> No
     constraints = cli._build_optimization_constraints(
         config,
         metadata,
-        pd.Index(["VTI", "BND", "VNQ", "REMX"]),
+        pd.Index(config.universe.tickers),
     )
 
-    assert constraints["asset_classes"].to_dict() == {
-        "VTI": "equity",
-        "BND": "fixed_income",
-        "VNQ": "real_estate",
-        "REMX": "equity",
-    }
-    assert constraints["expense_ratios"].to_dict() == {
-        "VTI": pytest.approx(0.0003),
-        "BND": pytest.approx(0.0003),
-        "VNQ": pytest.approx(0.0013),
-        "REMX": pytest.approx(0.0058),
-    }
-    assert constraints["ticker_bounds"] == {
-        "VTI": (0.20, 0.60),
-        "BND": (0.00, 0.40),
-        "VNQ": (0.00, 0.10),
-        "REMX": (0.00, 0.05),
-    }
+    assert constraints["asset_classes"]["VTI"] == "equity"
+    assert constraints["asset_classes"]["BND"] == "fixed_income"
+    assert constraints["asset_classes"]["VNQ"] == "real_estate"
+    assert constraints["asset_classes"]["REMX"] == "equity"
+    assert constraints["expense_ratios"]["VTI"] == pytest.approx(0.0003)
+    assert constraints["expense_ratios"]["BND"] == pytest.approx(0.0003)
+    assert constraints["expense_ratios"]["VNQ"] == pytest.approx(0.0013)
+    assert constraints["expense_ratios"]["REMX"] == pytest.approx(0.0058)
+    assert set(constraints["ticker_bounds"]) == set(config.constraints.ticker_bounds)
+    assert constraints["ticker_bounds"]["VTI"] == (0.20, 0.60)
+    assert constraints["ticker_bounds"]["BND"] == (0.00, 0.40)
+    assert constraints["ticker_bounds"]["VNQ"] == (0.00, 0.10)
+    assert constraints["ticker_bounds"]["REMX"] == (0.00, 0.05)
     assert constraints["asset_class_bounds"] is not None
     assert constraints["asset_class_bounds"]["fixed_income"] == (0.10, 0.45)
     assert constraints["asset_class_bounds"]["real_estate"] == (0.00, 0.10)
-    assert constraints["bond_assets"] == ["BND"]
+    assert constraints["bond_assets"] == ["BND", "IEI", "TIP", "TLT"]
     assert constraints["min_bond_exposure"] == pytest.approx(0.10)

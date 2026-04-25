@@ -1,10 +1,13 @@
 ./.github/workflows/ci.yml
+./Makefile
 ./README.md
 ./configs/base.yaml
 ./configs/constraints_long_only.yaml
 ./configs/universe_global_core.yaml
 ./configs/universe_us_core.yaml
 ./data/metadata/etf_universe.csv
+./data/processed/prices_validated.parquet
+./data/processed/returns.parquet
 ./docs/architecture.md
 ./docs/assumptions_and_limitations.md
 ./docs/data_dictionary.md
@@ -19,10 +22,12 @@
 ./docs/runbook.md
 ./docs/start_here.md
 ./docs/trust_and_safety.md
+./handoff/generate_handoff_bundle.txt
 ./handoff/included_files.txt
 ./handoff/pytest.txt
 ./handoff/ruff_check.txt
 ./handoff/ruff_format_check.txt
+./handoff/run_all.txt
 ./handoff/uv_sync.txt
 ./pyproject.toml
 ./reports/excel/optimized_portfolios.xlsx
@@ -42,6 +47,9 @@
 ./reports/html/latest_report.html
 ./reports/metrics/backtest_metrics.json
 ./reports/runs/backtest_run-all-20260424T175044Z-3777911e.json
+./reports/runs/backtest_run-all-20260424T223726Z-b15143d6.json
+./reports/runs/backtest_run-all-20260425T011014Z-e4361d4e.json
+./scripts/generate_handoff_bundle.py
 ./src/etf_portfolio/__init__.py
 ./src/etf_portfolio/backtesting/contributions.py
 ./src/etf_portfolio/backtesting/costs.py

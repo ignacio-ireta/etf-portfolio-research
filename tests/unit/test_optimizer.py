@@ -306,6 +306,52 @@ def test_optimizer_rejects_infeasible_ticker_bounds() -> None:
         )
 
 
+def test_optimizer_rejects_combined_linear_infeasibility_before_slsqp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("SLSQP should not run for infeasible linear constraints")
+
+    monkeypatch.setattr("etf_portfolio.optimization.optimizer.minimize", fail_if_called)
+
+    with pytest.raises(ValueError, match="combined linear constraints"):
+        optimize_portfolio(
+            make_expected_returns(),
+            make_covariance_matrix(),
+            method="max_sharpe",
+            max_weight=1.0,
+            asset_classes=make_asset_classes(),
+            asset_class_bounds={
+                "equity": (0.80, 1.0),
+                "fixed_income": (0.30, 1.0),
+            },
+        )
+
+
+def test_optimizer_logs_default_cap_ticker_cap_and_realized_largest_weight(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.INFO):
+        optimize_portfolio(
+            make_expected_returns(),
+            make_covariance_matrix(),
+            method="min_variance",
+            max_weight=0.80,
+            ticker_bounds={"REMX": (0.0, 0.05)},
+        )
+
+    started = next(
+        record for record in caplog.records if getattr(record, "event", "") == "optimizer_started"
+    )
+    completed = next(
+        record for record in caplog.records if getattr(record, "event", "") == "optimizer_completed"
+    )
+    assert started.default_max_weight == pytest.approx(0.80)
+    assert started.ticker_bound_count == 1
+    assert started.tightest_ticker_cap == pytest.approx(0.05)
+    assert completed.realized_largest_weight <= 0.80 + 1e-8
+
+
 def test_frontier_logs_skipped_infeasible_points(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,

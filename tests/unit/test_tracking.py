@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
 import pytest
 
 from etf_portfolio.config import load_config
-from etf_portfolio.tracking import build_run_record, relative_to_project_root
+from etf_portfolio.tracking import build_run_record, relative_to_project_root, write_run_record
 
 
 def test_build_run_record_requires_git_commit(tmp_path: Path) -> None:
@@ -47,6 +48,30 @@ def test_build_run_record_uses_commit_hash_and_relative_artifact_paths(tmp_path:
     assert record["data_version"]["path"] == "data/processed/returns.parquet"
     assert record["output_artifacts"]["metrics"]["path"] == "reports/metrics.json"
     assert not Path(record["output_artifacts"]["metrics"]["path"]).is_absolute()
+
+
+def test_write_run_record_sanitizes_nonfinite_values_as_strict_json(tmp_path: Path) -> None:
+    record = {
+        "stage": "backtest",
+        "run_id": "strict-json",
+        "backtest_metrics": {
+            "Sharpe Ratio": float("nan"),
+            "Sortino Ratio": float("inf"),
+            "Calmar Ratio": float("-inf"),
+        },
+    }
+
+    output_path = write_run_record(record, artifact_dir=tmp_path)
+
+    raw_text = output_path.read_text(encoding="utf-8")
+    assert "NaN" not in raw_text
+    assert "Infinity" not in raw_text
+    parsed = json.loads(raw_text)
+    assert parsed["backtest_metrics"] == {
+        "Calmar Ratio": None,
+        "Sharpe Ratio": None,
+        "Sortino Ratio": None,
+    }
 
 
 def test_relative_to_project_root_rejects_external_paths(tmp_path: Path) -> None:

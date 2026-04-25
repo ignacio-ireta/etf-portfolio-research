@@ -13,6 +13,7 @@ import pandas as pd
 from plotly.io import write_html
 
 from etf_portfolio.backtesting.engine import run_walk_forward_backtest
+from etf_portfolio.backtesting.metrics import calculate_sharpe_ratio
 from etf_portfolio.config import AppConfig, OptimizationObjective, load_config
 from etf_portfolio.data.ingest import ingest_price_data, load_etf_universe_metadata
 from etf_portfolio.data.providers import (
@@ -360,8 +361,10 @@ def run_optimize(
     )
     portfolio_return = float(weights.dot(expected_returns))
     portfolio_volatility = float((weights.T @ covariance_matrix @ weights) ** 0.5)
-    portfolio_sharpe = (
-        portfolio_return / portfolio_volatility if portfolio_volatility > 0.0 else None
+    portfolio_sharpe = calculate_sharpe_ratio(
+        portfolio_return,
+        portfolio_volatility,
+        get_risk_free_rate(config),
     )
     log_event(
         LOGGER,
@@ -1130,6 +1133,17 @@ def _build_benchmark_suite(
             min_bond_exposure=min_bond_exposure,
             expense_ratios=expense_ratios,
             risk_free_rate=risk_free_rate,
+            rebalance_mode=config.rebalance.mode,
+            contribution_amount=config.rebalance.contribution_amount,
+            tolerance_bands=config.rebalance.tolerance_bands,
+            initial_capital=config.backtest.initial_capital,
+            fallback_sell_allowed=config.rebalance.fallback_sell_allowed,
+            fallback_drift_threshold=(
+                config.rebalance.fallback.sell_allowed_if_absolute_drift_exceeds
+                if config.rebalance.fallback is not None
+                else None
+            ),
+            realized_constraint_policy=config.rebalance.realized_constraint_policy,
             covariance_method=config.optimization.risk_model,
             expected_return_method=config.optimization.expected_return_estimator,
         )
@@ -1151,6 +1165,17 @@ def _build_benchmark_suite(
         expense_ratios=expense_ratios,
         risk_free_rate=risk_free_rate,
         apply_previous_weights_lag=True,
+        rebalance_mode=config.rebalance.mode,
+        contribution_amount=config.rebalance.contribution_amount,
+        tolerance_bands=config.rebalance.tolerance_bands,
+        initial_capital=config.backtest.initial_capital,
+        fallback_sell_allowed=config.rebalance.fallback_sell_allowed,
+        fallback_drift_threshold=(
+            config.rebalance.fallback.sell_allowed_if_absolute_drift_exceeds
+            if config.rebalance.fallback is not None
+            else None
+        ),
+        realized_constraint_policy=config.rebalance.realized_constraint_policy,
         covariance_method=config.optimization.risk_model,
         expected_return_method=config.optimization.expected_return_estimator,
     )
@@ -1216,21 +1241,16 @@ def _asset_class_bounds(
     if not config.constraints.asset_class_bounds:
         return None
     available_asset_classes = set(asset_classes.dropna().astype(str))
-    filtered_bounds = {
-        asset_class: bounds
-        for asset_class, bounds in config.constraints.asset_class_bounds.items()
-        if asset_class in available_asset_classes
-    }
-    if not filtered_bounds:
-        configured_classes = sorted(config.constraints.asset_class_bounds)
-        available_classes = sorted(available_asset_classes)
+    configured_classes = set(config.constraints.asset_class_bounds)
+    unknown_classes = sorted(configured_classes - available_asset_classes)
+    if unknown_classes:
         raise ValueError(
-            "Configured constraints.asset_class_bounds do not match any metadata "
-            f"asset_class values. configured={configured_classes}, "
-            f"available={available_classes}"
+            "Configured constraints.asset_class_bounds contains unknown asset_class "
+            f"values. unknown={unknown_classes}, available={sorted(available_asset_classes)}"
         )
     return {
-        asset_class: (bounds.min, bounds.max) for asset_class, bounds in filtered_bounds.items()
+        asset_class: (bounds.min, bounds.max)
+        for asset_class, bounds in config.constraints.asset_class_bounds.items()
     }
 
 
@@ -1241,14 +1261,17 @@ def _ticker_bounds(
     if not config.constraints.ticker_bounds:
         return None
     available_tickers = {str(ticker).upper() for ticker in columns}
-    filtered_bounds = {
-        ticker.upper(): bounds
-        for ticker, bounds in config.constraints.ticker_bounds.items()
-        if ticker.upper() in available_tickers
+    normalized_bounds = {
+        ticker.upper(): bounds for ticker, bounds in config.constraints.ticker_bounds.items()
     }
-    if not filtered_bounds:
-        return None
-    return {ticker: (bounds.min, bounds.max) for ticker, bounds in filtered_bounds.items()}
+    unknown_tickers = sorted(set(normalized_bounds) - available_tickers)
+    if unknown_tickers:
+        raise ValueError(
+            "Configured constraints.ticker_bounds contains unknown tickers for the "
+            f"available return columns. unknown={unknown_tickers}, "
+            f"available={sorted(available_tickers)}"
+        )
+    return {ticker: (bounds.min, bounds.max) for ticker, bounds in normalized_bounds.items()}
 
 
 def _bond_assets(metadata: pd.DataFrame, columns: pd.Index) -> list[str] | None:

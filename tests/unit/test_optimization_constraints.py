@@ -12,6 +12,7 @@ from etf_portfolio.optimization.constraints import (
     build_linear_constraints,
     build_nonlinear_constraints,
     check_linear_feasibility,
+    validate_linear_feasibility,
 )
 
 
@@ -45,6 +46,17 @@ def test_build_bounds_long_short_respects_explicit_min_weight_floor() -> None:
 
     np.testing.assert_array_equal(bounds.lb, np.full(len(assets), -0.1))
     np.testing.assert_array_equal(bounds.ub, np.full(len(assets), 0.5))
+
+
+def test_build_bounds_rejects_unknown_ticker_bounds() -> None:
+    with pytest.raises(ValueError, match="unknown tickers"):
+        build_bounds(
+            assets=_assets(),
+            long_only=True,
+            min_weight=0.0,
+            max_weight=0.4,
+            ticker_bounds={"MISSING": (0.0, 0.1)},
+        )
 
 
 def test_linear_constraints_always_includes_weight_sum_equality() -> None:
@@ -100,6 +112,25 @@ def test_linear_constraints_reject_missing_asset_class_metadata() -> None:
             weight_sum=1.0,
             asset_classes=asset_classes,
             asset_class_bounds={"equity": (0.0, 1.0)},
+            bond_assets=None,
+            min_bond_exposure=None,
+            expense_ratios=None,
+            max_expense_ratio=None,
+        )
+
+
+def test_linear_constraints_reject_unknown_asset_class_bounds() -> None:
+    assets = _assets()
+    asset_classes = pd.Series(
+        {"VTI": "equity", "VEA": "equity", "BND": "fixed_income", "IAU": "commodity"}
+    )
+
+    with pytest.raises(ValueError, match="unknown asset classes"):
+        build_linear_constraints(
+            assets=assets,
+            weight_sum=1.0,
+            asset_classes=asset_classes,
+            asset_class_bounds={"equity": (0.0, 1.0), "digital_assets": (0.0, 0.1)},
             bond_assets=None,
             min_bond_exposure=None,
             expense_ratios=None,
@@ -272,3 +303,27 @@ def test_check_linear_feasibility_accepts_satisfying_weights() -> None:
 
     assert check_linear_feasibility(feasible, [constraint])
     assert not check_linear_feasibility(infeasible, [constraint])
+
+
+def test_validate_linear_feasibility_rejects_combined_infeasible_constraints() -> None:
+    assets = _assets()
+    bounds = build_bounds(assets=assets, long_only=True, min_weight=0.0, max_weight=1.0)
+    asset_classes = pd.Series(
+        {"VTI": "equity", "VEA": "equity", "BND": "fixed_income", "IAU": "commodity"}
+    )
+    constraints = build_linear_constraints(
+        assets=assets,
+        weight_sum=1.0,
+        asset_classes=asset_classes,
+        asset_class_bounds={
+            "equity": (0.70, 1.0),
+            "fixed_income": (0.40, 1.0),
+        },
+        bond_assets=None,
+        min_bond_exposure=None,
+        expense_ratios=None,
+        max_expense_ratio=None,
+    )
+
+    with pytest.raises(ValueError, match="combined linear constraints"):
+        validate_linear_feasibility(bounds=bounds, constraints=constraints)

@@ -10,7 +10,9 @@ INCLUDE_EXACT_FILES = (
     Path("pyproject.toml"),
     Path("uv.lock"),
     Path("README.md"),
+    Path("Makefile"),
     Path(".github/workflows/ci.yml"),
+    Path("scripts/generate_handoff_bundle.py"),
     Path("data/metadata/etf_universe.csv"),
     Path("reports/metrics/backtest_metrics.json"),
     Path("reports/html/latest_report.html"),
@@ -19,6 +21,7 @@ INCLUDE_EXACT_FILES = (
 )
 
 INCLUDE_GLOBS = (
+    "data/processed/*.parquet",
     "handoff/*.txt",
     "reports/figures/*.png",
     "reports/runs/*.json",
@@ -35,7 +38,6 @@ EXCLUDE_PATH_PREFIXES = (
     "__pycache__",
     ".venv",
     "data/raw",
-    "data/processed",
     "mlruns",
 )
 

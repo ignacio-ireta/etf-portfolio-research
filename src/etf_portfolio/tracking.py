@@ -78,9 +78,19 @@ def build_run_record(
 def write_run_record(record: dict[str, Any], *, artifact_dir: Path) -> Path:
     """Persist a run record and return the written path."""
 
+    from etf_portfolio.ml.train import sanitize_json_payload
+
     artifact_dir.mkdir(parents=True, exist_ok=True)
     output_path = artifact_dir / f"{record['stage']}_{record['run_id']}.json"
-    output_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+    output_path.write_text(
+        json.dumps(
+            sanitize_json_payload(record, allow_nan=False),
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        ),
+        encoding="utf-8",
+    )
     return output_path
 
 

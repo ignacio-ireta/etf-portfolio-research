@@ -20,6 +20,14 @@ Assumption:
 
 - expected returns are backward-looking and estimated from the trailing window available at each rebalance date
 
+Missing-data policy:
+
+- observed prices must be strictly positive; zero and negative observed prices fail validation before returns are created
+- requested ticker columns must be returned by the configured provider; omitted provider columns fail ingestion instead of producing partial universes
+- simple returns preserve missing prices by default and call pandas with `fill_method=None`; a missing middle price produces missing returns around that gap instead of an implicit flat return and catch-up return
+- forward-filling prices before return calculation is only allowed when a caller explicitly requests the `forward_fill` missing-price policy
+- suspicious-jump detection also uses `fill_method=None`, so jumps are measured only across adjacent observed prices and are not created by implicit gap filling
+
 ## Covariance Estimation
 
 Implemented in `src/etf_portfolio/features/estimators.py`.
@@ -48,6 +56,7 @@ The config selects the optimizer objective through `optimization.active_objectiv
 Current pipeline behavior:
 
 - `optimization.active_objective` is the authoritative objective selector used by `optimize`, `backtest`, and `run-all`
+- `target_return` and `target_volatility` remain optimizer/frontier APIs, not run-config objectives; `optimization.target_return` and `optimization.target_volatility` keys are rejected in config files
 - run artifacts in `reports/runs/*.json` persist that effective `optimization_method` for auditability
 
 ## Constraints
@@ -67,44 +76,37 @@ Ticker bound behavior:
 
 - `optimization.default_max_weight_per_etf` and optimizer `min_weight` define default per-asset bounds
 - `constraints.ticker_bounds` overrides those defaults per ticker when provided
-- feasibility is checked before solve using the effective per-ticker bounds:
-  - `sum(min_bounds) <= weight_sum`
-  - `sum(max_bounds) >= weight_sum`
+- ticker bounds must refer to configured/available tickers; stale ticker bounds fail validation instead of being ignored
+- asset-class bounds must refer to metadata asset classes available to the optimization universe
+- feasibility is checked before solve using the effective per-ticker bounds and the combined linear constraint system, including weight sum, ticker bounds, asset-class bounds, bond exposure, and expense cap
 
 Important limitation:
 
 - the optimizer and backtest engine support richer constraints than the earliest scaffold docs implied, but constraint effectiveness still depends on clean ETF metadata and sensible config bounds
 - the report frontier is now built under the same constraint bundle as the optimizer and walk-forward backtest, so infeasibility in one surface should be investigated as a shared-constraint problem rather than a reporting-only discrepancy
 
-## Backtest Design
+## Benchmark Fairness
 
-Walk-forward backtesting is implemented in `src/etf_portfolio/backtesting/engine.py`.
+To ensure backtest comparisons are defensible, optimized benchmarks (such as Equal-Weight, Inverse-Volatility, or Min-Variance) are subject to the same operational constraints as the main strategy:
 
-At each rebalance date:
+- **Shared Rebalance Mode:** If the main strategy uses `contribution_only`, optimized benchmarks also use `contribution_only`. This prevents benchmarks from having an "unfair" advantage of being able to sell to maintain risk targets if the user cannot.
+- **Shared Contribution Amount:** Any periodic external contribution added to the main strategy is also added to optimized benchmarks.
+- **Shared Operational Parameters:** Initial capital, transaction costs, slippage, and rebalance frequency are aligned across all optimized portfolios and benchmarks.
 
-1. use only trailing return history strictly before the rebalance date
-2. estimate expected returns and covariance from that trailing window
-3. optimize weights under the configured constraints
-4. decide how optimizer targets are translated into realized holdings based on the rebalance mode and realized-constraint policy
-5. apply turnover-based transaction costs and slippage assumptions
-6. hold through the next rebalance window
-7. record realized returns, optimizer targets, applied weights, trades, and diagnostics
+Constant-weight benchmarks (like 60/40 or single ETFs) remain as theoretical ideal baselines and do not model transaction costs or drift between rebalance dates unless otherwise noted.
 
-Benchmarks currently supported in reporting/backtesting:
+## Execution Timing Assumptions
 
-- selected benchmark ETF
-- configured secondary benchmark mixes
-- equal-weight universe
-- inverse-volatility baseline
-- previous optimized strategy
+The backtest engine assumes **End-of-Day Execution**:
 
-Backtest windowing and realized holdings:
+1. **Information Cutoff:** At the close of `rebalance_date` (T), the optimizer calculates new target weights using data available up to and including T.
+2. **Execution:** Trades are assumed to execute at the close of T.
+3. **Transaction Costs:** Costs and slippage for those trades are subtracted from the *first day* of the new period (T+1).
+4. **Realized Returns:**
+   - The return on `rebalance_date` (T) is realized using the **old** weights (from the previous period).
+   - The returns starting from the next day (T+1) are realized using the **new** weights (applied at T close).
 
-- `backtest.start_date` and `backtest.end_date` are applied to aligned asset and benchmark return series before rebalance dates are generated
-- `WalkForwardBacktestResult` stores optimizer `target_weights` separately from realized `applied_weights`
-- realized dollar trades are persisted as `trades_dollars`
-- contribution-only runs persist `realized_constraint_violations` so drift beyond configured ticker, asset-class, or bond-floor constraints is explicit
-- with `rebalance.realized_constraint_policy: enforce_hard`, contribution-only may perform a sell-based fallback rebalance when realized hard caps are breached; with `report_drift`, those breaches are reported as soft drift warnings instead
+This approach avoids lookahead bias by ensuring the weights applied to a return were determined strictly before that return was realized.
 
 ## Risk Metrics
 
@@ -129,6 +131,15 @@ Implemented portfolio and backtest metrics include:
 - worst month
 - worst quarter
 - best month
+
+Sharpe, Sortino, and Calmar ratios are reported as finite values. When the
+relevant denominator is effectively zero, the ratio is reported as `0.0`
+rather than `NaN` or infinity.
+
+Turnover is defined as gross traded-weight turnover: the sum of absolute
+weight changes across assets. Portfolio summary turnover averages that gross
+change across rebalance-to-rebalance transitions and excludes the initial
+allocation from cash.
 
 Rolling and exposure views in the report include:
 

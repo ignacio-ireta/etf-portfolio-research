@@ -100,7 +100,7 @@ def write_metrics_json(metrics: dict[str, Any], output_path: Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         json.dumps(
-            sanitize_json_payload(metrics),
+            sanitize_json_payload(metrics, allow_nan=False),
             indent=2,
             sort_keys=True,
             allow_nan=False,
@@ -110,29 +110,35 @@ def write_metrics_json(metrics: dict[str, Any], output_path: Path) -> Path:
     return output_path
 
 
-def sanitize_json_payload(payload: Any) -> Any:
+def sanitize_json_payload(payload: Any, *, allow_nan: bool = False) -> Any:
     if isinstance(payload, dict):
         return {
-            str(sanitize_json_payload(key)): sanitize_json_payload(value)
+            str(sanitize_json_payload(key, allow_nan=allow_nan)): sanitize_json_payload(
+                value,
+                allow_nan=allow_nan,
+            )
             for key, value in payload.items()
         }
     if isinstance(payload, (list, tuple)):
-        return [sanitize_json_payload(value) for value in payload]
+        return [sanitize_json_payload(value, allow_nan=allow_nan) for value in payload]
     if isinstance(payload, (pd.Timestamp, datetime, date)):
         return payload.isoformat()
     if isinstance(payload, pd.Series):
         return {
-            str(sanitize_json_payload(key)): sanitize_json_payload(value)
+            str(sanitize_json_payload(key, allow_nan=allow_nan)): sanitize_json_payload(
+                value,
+                allow_nan=allow_nan,
+            )
             for key, value in payload.items()
         }
     if isinstance(payload, pd.Index):
-        return [sanitize_json_payload(value) for value in payload.tolist()]
+        return [sanitize_json_payload(value, allow_nan=allow_nan) for value in payload.tolist()]
     if isinstance(payload, np.ndarray):
-        return [sanitize_json_payload(value) for value in payload.tolist()]
+        return [sanitize_json_payload(value, allow_nan=allow_nan) for value in payload.tolist()]
     if isinstance(payload, np.generic):
-        return sanitize_json_payload(payload.item())
+        return sanitize_json_payload(payload.item(), allow_nan=allow_nan)
     if isinstance(payload, float):
-        return payload if math.isfinite(payload) else None
+        return payload if allow_nan or math.isfinite(payload) else None
     return payload
 
 

@@ -318,9 +318,14 @@ def _realized_window(
     start_date: pd.Timestamp,
     end_date: pd.Timestamp | None,
 ) -> pd.DataFrame:
+    """Return returns strictly after start_date up to (and including) end_date.
+
+    If rebalancing at T, weights are applied to returns starting at T+1.
+    """
+
     if end_date is None:
-        return asset_returns.loc[asset_returns.index >= start_date]
-    return asset_returns.loc[(asset_returns.index >= start_date) & (asset_returns.index < end_date)]
+        return asset_returns.loc[asset_returns.index > start_date]
+    return asset_returns.loc[(asset_returns.index > start_date) & (asset_returns.index <= end_date)]
 
 
 def _validate_asset_returns(asset_returns: pd.DataFrame) -> None:

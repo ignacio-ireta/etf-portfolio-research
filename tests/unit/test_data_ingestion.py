@@ -26,6 +26,21 @@ class FakePriceProvider(PriceDataProvider):
         return self._prices.loc[:, tickers]
 
 
+class OmittedColumnProvider(PriceDataProvider):
+    provider_name = "omitted"
+
+    def __init__(self, prices: pd.DataFrame) -> None:
+        self._prices = prices
+
+    def get_prices(
+        self,
+        tickers: list[str],
+        start_date: date | str,
+        end_date: date | str | None,
+    ) -> pd.DataFrame:
+        return self._prices.drop(columns=["BND"])
+
+
 @pytest.fixture
 def clean_prices() -> pd.DataFrame:
     index = pd.to_datetime(["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05"])
@@ -77,15 +92,33 @@ def test_validate_price_data_accepts_clean_data_and_flags_suspicious_jumps(
     assert set(result.suspicious_jumps["ticker"]) == {"VOO"}
 
 
-def test_validate_price_data_rejects_negative_prices(
+def test_validate_price_data_rejects_non_positive_observed_prices(
     clean_prices: pd.DataFrame,
     metadata: pd.DataFrame,
 ) -> None:
     prices = clean_prices.copy()
-    prices.loc[pd.Timestamp("2024-01-03"), "BND"] = -1.0
+    prices.loc[pd.Timestamp("2024-01-03"), "BND"] = 0.0
 
-    with pytest.raises(ValueError, match="Negative prices"):
+    with pytest.raises(ValueError, match="strictly positive"):
         validate_price_data(prices, metadata=metadata)
+
+
+def test_validate_price_data_does_not_forward_fill_suspicious_jump_gaps(
+    clean_prices: pd.DataFrame,
+) -> None:
+    prices = clean_prices.copy()
+    prices.loc[pd.Timestamp("2024-01-03"), "VOO"] = pd.NA
+    prices.loc[pd.Timestamp("2024-01-04"), "VOO"] = 140.0
+    prices.loc[pd.Timestamp("2024-01-05"), "VOO"] = 141.0
+
+    result = validate_price_data(
+        prices,
+        min_history_ratio=0.0,
+        max_missing_fraction=1.0,
+        max_jump_abs_return=0.20,
+    )
+
+    assert result.suspicious_jumps.empty
 
 
 def test_validate_price_data_rejects_pre_inception_history(
@@ -189,3 +222,25 @@ def test_ingest_price_data_uses_single_canonical_filename(
     assert not list(raw_dir.glob("prices_*.parquet")), (
         "Dated/provider-suffixed parquet files must not be created."
     )
+
+
+def test_ingest_price_data_rejects_omitted_provider_columns(
+    clean_prices: pd.DataFrame,
+    metadata: pd.DataFrame,
+    tmp_path: Path,
+) -> None:
+    provider = OmittedColumnProvider(clean_prices)
+
+    with pytest.raises(ValueError, match="requested tickers: BND"):
+        ingest_price_data(
+            provider,
+            ["VOO", "BND", "ACWI"],
+            start_date="2024-01-01",
+            end_date="2024-01-31",
+            metadata=metadata,
+            benchmark_ticker="ACWI",
+            raw_dir=tmp_path / "raw",
+            max_missing_fraction=0.0,
+        )
+
+    assert not (tmp_path / "raw" / "prices.parquet").exists()

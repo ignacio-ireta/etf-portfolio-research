@@ -63,8 +63,12 @@ def ingest_price_data(
     ``ValueError`` before any artifact is written.
     """
 
+    requested_tickers = list(dict.fromkeys(tickers))
     raw_prices = provider.get_prices(tickers=tickers, start_date=start_date, end_date=end_date)
     adjusted_prices = _normalize_prices(raw_prices)
+    _assert_requested_tickers_returned(
+        adjusted_prices, requested_tickers, provider_name=provider.provider_name
+    )
 
     cross_check_prices: pd.DataFrame | None = None
     cross_check_provider_name = "reference"
@@ -76,6 +80,11 @@ def ingest_price_data(
             end_date=end_date,
         )
         cross_check_prices = _normalize_prices(reference_raw)
+        _assert_requested_tickers_returned(
+            cross_check_prices,
+            requested_tickers,
+            provider_name=cross_check_provider_name,
+        )
 
     validation_result = validate_price_data(
         adjusted_prices,
@@ -109,6 +118,23 @@ def _normalize_prices(prices: pd.DataFrame) -> pd.DataFrame:
     normalized = prices.copy()
     normalized.index = pd.to_datetime(normalized.index)
     return normalized.sort_index()
+
+
+def _assert_requested_tickers_returned(
+    prices: pd.DataFrame,
+    requested_tickers: list[str],
+    *,
+    provider_name: str,
+) -> None:
+    """Ensure providers did not silently omit requested ticker columns."""
+
+    returned = {str(column) for column in prices.columns}
+    missing = [ticker for ticker in requested_tickers if ticker not in returned]
+    if missing:
+        raise ValueError(
+            f"{provider_name} did not return price columns for requested tickers: "
+            f"{', '.join(missing)}."
+        )
 
 
 def _write_parquet(frame: pd.DataFrame, path: Path) -> None:

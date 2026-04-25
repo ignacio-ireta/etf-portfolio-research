@@ -60,8 +60,10 @@ def calculate_sharpe_ratio(
 ) -> float:
     """Compute the Sharpe ratio from annualized return and volatility inputs."""
 
-    if portfolio_volatility <= 0.0:
-        raise ValueError("portfolio_volatility must be positive.")
+    if portfolio_volatility < 0.0:
+        raise ValueError("portfolio_volatility must not be negative.")
+    if np.isclose(portfolio_volatility, 0.0):
+        return 0.0
     return float((portfolio_return - risk_free_rate) / portfolio_volatility)
 
 
@@ -124,6 +126,8 @@ def sharpe_ratio(
 
     excess_returns = returns - (risk_free_rate / periods_per_year)
     volatility = returns.std(ddof=1)
+    if np.isclose(volatility, 0.0):
+        return 0.0
     return float(excess_returns.mean() / volatility * np.sqrt(periods_per_year))
 
 
@@ -140,6 +144,8 @@ def sortino_ratio(
     excess_returns = returns - (risk_free_rate / periods_per_year)
     downside_returns = np.minimum(excess_returns, 0.0)
     downside_deviation = np.sqrt(np.mean(np.square(downside_returns))) * np.sqrt(periods_per_year)
+    if np.isclose(downside_deviation, 0.0):
+        return 0.0
     return float(excess_returns.mean() * periods_per_year / downside_deviation)
 
 
@@ -189,18 +195,20 @@ def calmar_ratio(returns: pd.Series, *, periods_per_year: int) -> float:
 
     growth_rate = cagr(returns, periods_per_year=periods_per_year)
     drawdown = float(max_drawdown(returns))
+    if np.isclose(drawdown, 0.0):
+        return 0.0
     return float(growth_rate / abs(drawdown))
 
 
 def turnover(weights: pd.DataFrame) -> float:
-    """Compute average one-way turnover across rebalance dates."""
+    """Compute average gross weight turnover after the initial allocation."""
 
     if weights.empty:
         raise ValueError("weights must not be empty.")
     if len(weights.index) == 1:
-        return float(weights.iloc[0].abs().sum())
+        return 0.0
 
-    changes = weights.fillna(0.0).diff().abs().sum(axis=1).dropna()
+    changes = weights.fillna(0.0).diff().iloc[1:].abs().sum(axis=1)
     return float(changes.mean())
 
 

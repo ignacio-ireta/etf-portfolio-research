@@ -7,7 +7,7 @@ name = "etf-portfolio-research"
 version = "0.1.0"
 description = "Reproducible ETF portfolio research project scaffold."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
   "kaleido",
   "numpy",
@@ -30,7 +30,6 @@ etf-portfolio = "etf_portfolio.cli:main"
 
 [dependency-groups]
 dev = [
-  "dvc",
   "pytest",
   "ruff",
 ]

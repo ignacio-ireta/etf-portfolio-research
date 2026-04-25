@@ -45,6 +45,42 @@ def test_calculate_simple_returns_alias() -> None:
     )
 
 
+def test_simple_returns_preserve_missing_prices_by_default() -> None:
+    prices = pd.Series(
+        [100.0, np.nan, 110.0],
+        index=pd.date_range("2024-01-31", periods=3, freq="ME"),
+        name="price",
+    )
+
+    returns = simple_returns(prices)
+
+    assert returns.empty
+
+
+def test_simple_returns_forward_fill_requires_explicit_missing_policy() -> None:
+    prices = pd.Series(
+        [100.0, np.nan, 110.0],
+        index=pd.date_range("2024-01-31", periods=3, freq="ME"),
+        name="price",
+    )
+
+    returns = simple_returns(prices, missing="forward_fill")
+    expected = pd.Series([0.0, 0.1], index=prices.index[1:], name="price")
+
+    pd.testing.assert_series_equal(returns, expected)
+
+
+def test_simple_returns_reject_non_positive_observed_prices() -> None:
+    prices = pd.Series(
+        [100.0, 0.0, 110.0],
+        index=pd.date_range("2024-01-31", periods=3, freq="ME"),
+        name="price",
+    )
+
+    with pytest.raises(ValueError, match="strictly positive"):
+        simple_returns(prices)
+
+
 def test_log_returns() -> None:
     returns = log_returns(make_price_series())
     expected = pd.Series(

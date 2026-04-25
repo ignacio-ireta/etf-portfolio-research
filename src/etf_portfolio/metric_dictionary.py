@@ -153,7 +153,10 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
         name="Turnover",
         category="Implementation",
         plain_english="How much of the portfolio changed at rebalances on average.",
-        formula_summary="Average sum of absolute weight changes across rebalance dates.",
+        formula_summary=(
+            "Average gross traded-weight change across rebalance-to-rebalance transitions, "
+            "excluding the initial allocation from cash."
+        ),
         good_bad_interpretation="Lower usually means fewer trades, lower costs, and less tax drag.",
         caveats="The project models costs simply; real execution and taxes can differ.",
     ),

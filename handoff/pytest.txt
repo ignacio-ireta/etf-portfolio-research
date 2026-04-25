@@ -1,11 +1,9 @@
 ........................................................................ [ 31%]
-........................................................................ [ 63%]
-........................................................................ [ 94%]
-............                                                             [100%]{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-24T18:08:41.902013+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-24T18:08:41.902155+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-24T18:08:41.902314+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-24T18:08:41.902343+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-24T18:08:41.902449+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-24T18:08:41.902468+00:00"}
+........................................................................ [ 62%]
+........................................................................ [ 93%]
+...............                                                          [100%]{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T01:10:07.777911+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T01:10:07.778074+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T01:10:07.778165+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T01:10:07.778196+00:00"}
 
-228 passed in 152.86s (0:02:32)
+231 passed in 239.26s (0:03:59)

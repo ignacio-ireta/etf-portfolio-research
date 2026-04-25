@@ -163,7 +163,7 @@ universe:
     - TLT
 ```
 
-Then decide whether to also remove or adjust the matching `constraints.ticker_bounds.REMX` entry. The code filters bounds to available tickers, but keeping obsolete bounds makes the config harder for humans to read.
+Then also remove or adjust the matching `constraints.ticker_bounds.REMX` entry. Bounds for tickers outside `universe.tickers` are rejected during config validation so stale constraints cannot be silently ignored.
 
 If you add a new ETF instead of only removing one, also update `data/metadata/etf_universe.csv` with complete metadata. At minimum, the new ticker needs consistent asset class, region, currency, expense ratio, benchmark index, and inception date data.
 

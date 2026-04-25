@@ -32,6 +32,10 @@ MLTarget = Literal[
     "beat_benchmark",
 ]
 MLModelType = Literal["historical_mean", "ridge", "random_forest"]
+REPLACE_ON_OVERLAY_PATHS = {
+    ("constraints", "asset_class_bounds"),
+    ("constraints", "ticker_bounds"),
+}
 
 
 class ProjectConfig(BaseModel):
@@ -188,6 +192,8 @@ class InvestorProfileConfig(BaseModel):
 
 
 class OptimizationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     long_only: bool = True
     default_max_weight_per_etf: float = Field(gt=0.0, le=1.0)
     risk_model: RiskModel = "sample"
@@ -198,6 +204,14 @@ class OptimizationConfig(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _migrate_legacy_max_weight(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            unsupported_targets = sorted({"target_return", "target_volatility"}.intersection(value))
+            if unsupported_targets:
+                raise ValueError(
+                    "optimization.target_return and optimization.target_volatility are "
+                    "not supported in run config files. Use optimizer/frontier APIs for "
+                    "targeted efficient-frontier experiments."
+                )
         if not isinstance(value, dict) or "max_weight_per_etf" not in value:
             return value
         if "default_max_weight_per_etf" in value:
@@ -495,6 +509,13 @@ class AppConfig(BaseModel):
         ticker_bounds = {
             ticker.upper(): bounds for ticker, bounds in self.constraints.ticker_bounds.items()
         }
+        universe_tickers = {ticker.upper() for ticker in self.universe.tickers}
+        unknown_tickers = sorted(set(ticker_bounds) - universe_tickers)
+        if unknown_tickers:
+            raise ValueError(
+                "constraints.ticker_bounds contains tickers not present in universe.tickers: "
+                f"{unknown_tickers}."
+            )
         max_capacity = sum(
             ticker_bounds.get(ticker.upper()).max
             if ticker.upper() in ticker_bounds
@@ -549,12 +570,19 @@ def _load_yaml_file(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+def _deep_merge(
+    base: dict[str, Any],
+    overlay: dict[str, Any],
+    path: tuple[str, ...] = (),
+) -> dict[str, Any]:
     merged = dict(base)
 
     for key, value in overlay.items():
-        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
-            merged[key] = _deep_merge(merged[key], value)
+        current_path = (*path, key)
+        if current_path in REPLACE_ON_OVERLAY_PATHS:
+            merged[key] = value
+        elif key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = _deep_merge(merged[key], value, current_path)
         else:
             merged[key] = value
 

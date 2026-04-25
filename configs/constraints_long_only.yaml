@@ -14,12 +14,6 @@ constraints:
     VTI:
       min: 0.20
       max: 0.60
-    VEA:
-      min: 0.05
-      max: 0.35
-    VWO:
-      min: 0.00
-      max: 0.20
     BND:
       min: 0.00
       max: 0.40
@@ -35,15 +29,9 @@ constraints:
     VNQ:
       min: 0.00
       max: 0.10
-    GSG:
-      min: 0.00
-      max: 0.10
     QQQ:
       min: 0.00
       max: 0.15
     TLT:
       min: 0.00
       max: 0.15
-    REMX:
-      min: 0.00
-      max: 0.05

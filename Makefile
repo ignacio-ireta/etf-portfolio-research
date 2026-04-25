@@ -1,10 +1,10 @@
-.PHONY: sync test lint format check run repro handoff-bundle
+.PHONY: sync test lint format check run handoff-bundle
 
 sync:
 	uv sync --group dev
 
 test:
-	uv run pytest
+	uv run pytest -q
 
 lint:
 	uv run ruff check .
@@ -18,10 +18,7 @@ check:
 	uv run pytest
 
 run:
-	uv run etf-portfolio
-
-repro:
-	uv run dvc repro
+	uv run etf-portfolio run-all --config configs/base.yaml
 
 handoff-bundle:
 	uv run python scripts/generate_handoff_bundle.py

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import pandas as pd
 import pandas.testing as pdt
 import pytest
@@ -126,6 +128,10 @@ def test_calculate_sharpe_ratio_returns_expected_value() -> None:
     assert calculate_sharpe_ratio(0.10, 0.20, 0.02) == pytest.approx(0.4)
 
 
+def test_calculate_sharpe_ratio_returns_zero_for_zero_volatility() -> None:
+    assert calculate_sharpe_ratio(0.10, 0.0, 0.02) == 0.0
+
+
 def test_sortino_ratio_returns_expected_value() -> None:
     result = sortino_ratio(
         make_portfolio_returns(),
@@ -183,13 +189,54 @@ def test_calmar_ratio_returns_expected_value() -> None:
     assert result == pytest.approx(8.226714329881617)
 
 
+def test_zero_denominator_ratios_are_finite_for_flat_returns() -> None:
+    returns = pd.Series(
+        [0.0, 0.0, 0.0, 0.0],
+        index=pd.date_range("2024-01-31", periods=4, freq="ME"),
+    )
+
+    ratios = [
+        sharpe_ratio(returns, periods_per_year=12),
+        sortino_ratio(returns, periods_per_year=12),
+        calmar_ratio(returns, periods_per_year=12),
+    ]
+
+    assert ratios == [0.0, 0.0, 0.0]
+    assert all(math.isfinite(ratio) for ratio in ratios)
+
+
+def test_calmar_ratio_returns_zero_for_no_drawdown_series() -> None:
+    returns = pd.Series(
+        [0.01, 0.01, 0.01, 0.01],
+        index=pd.date_range("2024-01-31", periods=4, freq="ME"),
+    )
+
+    result = calmar_ratio(returns, periods_per_year=12)
+
+    assert result == 0.0
+    assert math.isfinite(result)
+
+
 def test_weight_diagnostics_return_expected_values() -> None:
     weights = make_weight_history()
 
-    assert turnover(weights) == pytest.approx(0.10)
+    assert turnover(weights) == pytest.approx(0.15)
     assert average_number_of_holdings(weights) == pytest.approx(2.0)
     assert largest_position(weights) == pytest.approx(0.60)
     assert herfindahl_concentration_index(weights) == pytest.approx(0.5083333333333334)
+
+
+def test_turnover_excludes_initial_allocation_and_uses_gross_weight_change() -> None:
+    weights = pd.DataFrame(
+        [
+            {"AAA": 1.0, "BBB": 0.0},
+            {"AAA": 0.0, "BBB": 1.0},
+        ],
+        index=pd.date_range("2024-01-31", periods=2, freq="ME"),
+    )
+
+    assert turnover(weights) == pytest.approx(2.0)
+    assert turnover(weights.iloc[:1]) == 0.0
 
 
 def test_period_extreme_metrics_return_expected_values() -> None:
@@ -209,7 +256,7 @@ def test_summarize_backtest_metrics_includes_benchmark_relative_and_holdings_sta
         risk_free_rate=0.02,
     )
 
-    assert summary["Turnover"] == pytest.approx(0.10)
+    assert summary["Turnover"] == pytest.approx(0.15)
     assert summary["Average Number of Holdings"] == pytest.approx(2.0)
     assert summary["Largest Position"] == pytest.approx(0.60)
     assert summary["Alpha"] == pytest.approx(0.016974757266420795)
@@ -260,7 +307,7 @@ def test_compare_against_benchmarks_keeps_weight_metrics_with_supplied_weights()
     )
 
     weighted = table.loc["Weighted Benchmark"]
-    assert weighted["Turnover"] == pytest.approx(0.10)
+    assert weighted["Turnover"] == pytest.approx(0.15)
     assert weighted["Average Number of Holdings"] == pytest.approx(2.0)
     assert weighted["Largest Position"] == pytest.approx(0.60)
     assert weighted["Herfindahl Concentration Index"] == pytest.approx(0.5083333333333334)

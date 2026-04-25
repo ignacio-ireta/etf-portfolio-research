@@ -14,11 +14,8 @@ Run the full pipeline:
 uv run etf-portfolio run-all --config configs/base.yaml
 ```
 
-Or reproduce with DVC:
-
-```bash
-uv run dvc repro
-```
+This repository does not currently define a DVC workflow. Reproduce results
+with the CLI command above or with `make run`.
 
 Primary generated outputs:
 
@@ -48,10 +45,11 @@ uv run etf-portfolio features --config configs/base.yaml
 uv run etf-portfolio backtest --config configs/base.yaml
 ```
 
-If you want the entire pipeline rebuilt from stage dependencies, use:
+If you want the entire pipeline rebuilt from the configured provider and local
+configuration, use:
 
 ```bash
-uv run dvc repro
+uv run etf-portfolio run-all --config configs/base.yaml
 ```
 
 ## How To Debug Failed Optimization

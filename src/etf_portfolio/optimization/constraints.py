@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
-from scipy.optimize import Bounds, LinearConstraint
+from scipy.optimize import Bounds, LinearConstraint, linprog
 
 if TYPE_CHECKING:
     from etf_portfolio.optimization.optimizer import OptimizationMethod
@@ -34,6 +34,13 @@ def build_bounds(
     upper = np.full(len(assets), max_weight, dtype=float)
     if ticker_bounds:
         normalized_bounds = {ticker.upper(): bounds for ticker, bounds in ticker_bounds.items()}
+        unknown_tickers = sorted(
+            normalized_bounds.keys() - {str(asset).upper() for asset in assets}
+        )
+        if unknown_tickers:
+            raise ValueError(
+                f"ticker_bounds contains unknown tickers not present in assets: {unknown_tickers}."
+            )
         for idx, asset in enumerate(assets):
             ticker_min, ticker_max = normalized_bounds.get(str(asset).upper(), (None, None))
             if ticker_min is not None:
@@ -143,6 +150,61 @@ def check_linear_feasibility(
     return True
 
 
+def validate_linear_feasibility(
+    *,
+    bounds: Bounds,
+    constraints: Sequence[LinearConstraint],
+) -> None:
+    """Fail early if no vector can satisfy bounds plus all linear constraints."""
+
+    variable_count = len(bounds.lb)
+    objective = np.zeros(variable_count, dtype=float)
+    variable_bounds = [
+        (float(lower), float(upper)) for lower, upper in zip(bounds.lb, bounds.ub, strict=True)
+    ]
+    eq_rows: list[np.ndarray] = []
+    eq_bounds: list[float] = []
+    ub_rows: list[np.ndarray] = []
+    ub_bounds: list[float] = []
+
+    for constraint in constraints:
+        matrix = np.asarray(constraint.A, dtype=float)
+        if matrix.ndim == 1:
+            matrix = matrix[None, :]
+        lower_bounds = np.broadcast_to(np.asarray(constraint.lb, dtype=float), matrix.shape[0])
+        upper_bounds = np.broadcast_to(np.asarray(constraint.ub, dtype=float), matrix.shape[0])
+
+        for row, lower, upper in zip(matrix, lower_bounds, upper_bounds, strict=True):
+            lower_is_finite = np.isfinite(lower)
+            upper_is_finite = np.isfinite(upper)
+            if lower_is_finite and upper_is_finite and np.isclose(lower, upper, atol=1e-10):
+                eq_rows.append(row)
+                eq_bounds.append(float(lower))
+                continue
+            if upper_is_finite:
+                ub_rows.append(row)
+                ub_bounds.append(float(upper))
+            if lower_is_finite:
+                ub_rows.append(-row)
+                ub_bounds.append(float(-lower))
+
+    result = linprog(
+        objective,
+        A_ub=np.vstack(ub_rows) if ub_rows else None,
+        b_ub=np.asarray(ub_bounds, dtype=float) if ub_bounds else None,
+        A_eq=np.vstack(eq_rows) if eq_rows else None,
+        b_eq=np.asarray(eq_bounds, dtype=float) if eq_bounds else None,
+        bounds=variable_bounds,
+        method="highs",
+    )
+    if not result.success:
+        raise ValueError(
+            "Constraints are infeasible before optimization: no portfolio can satisfy "
+            "the combined linear constraints (weight sum, ticker bounds, asset-class "
+            "bounds, bond exposure, and expense cap)."
+        )
+
+
 def _asset_class_linear_constraints(
     *,
     assets: pd.Index,
@@ -154,6 +216,13 @@ def _asset_class_linear_constraints(
     class_map = asset_classes.reindex(assets)
     if class_map.isna().any():
         raise ValueError("asset_classes must contain entries for every asset.")
+    available_asset_classes = set(class_map.dropna().astype(str))
+    unknown_asset_classes = sorted(set(asset_class_bounds) - available_asset_classes)
+    if unknown_asset_classes:
+        raise ValueError(
+            "asset_class_bounds contains unknown asset classes not present in asset_classes: "
+            f"{unknown_asset_classes}. available={sorted(available_asset_classes)}."
+        )
     constraints: list[LinearConstraint] = []
     for asset_class, bounds in asset_class_bounds.items():
         lower_bound, upper_bound = bounds
@@ -251,4 +320,5 @@ __all__ = [
     "build_linear_constraints",
     "build_nonlinear_constraints",
     "check_linear_feasibility",
+    "validate_linear_feasibility",
 ]

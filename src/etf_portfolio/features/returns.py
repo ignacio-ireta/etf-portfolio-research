@@ -2,21 +2,35 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import numpy as np
 import pandas as pd
 
+MissingPricePolicy = Literal["preserve", "forward_fill"]
 
-def calculate_simple_returns(prices: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
+
+def calculate_simple_returns(
+    prices: pd.Series | pd.DataFrame,
+    *,
+    missing: MissingPricePolicy = "preserve",
+) -> pd.Series | pd.DataFrame:
     """Compute simple percentage returns from price levels."""
 
     _validate_non_empty(prices)
-    return prices.pct_change().dropna()
+    _validate_strictly_positive_observed_prices(prices)
+    if missing not in ("preserve", "forward_fill"):
+        raise ValueError("missing must be either 'preserve' or 'forward_fill'.")
+    if missing == "forward_fill":
+        prices = prices.ffill()
+    return prices.pct_change(fill_method=None).dropna()
 
 
 def calculate_log_returns(prices: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
     """Compute log returns from price levels."""
 
     _validate_non_empty(prices)
+    _validate_strictly_positive_observed_prices(prices)
     return np.log(prices / prices.shift(1)).dropna()
 
 
@@ -45,10 +59,14 @@ def annualize_volatility(
     return daily_returns.std(ddof=1) * np.sqrt(periods_per_year)
 
 
-def simple_returns(prices: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
+def simple_returns(
+    prices: pd.Series | pd.DataFrame,
+    *,
+    missing: MissingPricePolicy = "preserve",
+) -> pd.Series | pd.DataFrame:
     """Backward-compatible alias for simple return calculation."""
 
-    return calculate_simple_returns(prices)
+    return calculate_simple_returns(prices, missing=missing)
 
 
 def log_returns(prices: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
@@ -103,6 +121,12 @@ def _validate_non_empty(data: pd.Series | pd.DataFrame) -> None:
         raise ValueError("Input data must not be empty.")
 
 
+def _validate_strictly_positive_observed_prices(prices: pd.Series | pd.DataFrame) -> None:
+    invalid = prices.le(0).fillna(False)
+    if bool(invalid.any().any() if isinstance(invalid, pd.DataFrame) else invalid.any()):
+        raise ValueError("Observed prices must be strictly positive.")
+
+
 __all__ = [
     "annualize_return",
     "annualize_volatility",
@@ -114,5 +138,6 @@ __all__ = [
     "drawdown_series",
     "log_returns",
     "max_drawdown",
+    "MissingPricePolicy",
     "simple_returns",
 ]

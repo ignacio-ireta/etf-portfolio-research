@@ -73,6 +73,12 @@ An optimized portfolio is not automatically better than a simple portfolio. It i
 
 The project uses walk-forward backtesting, which helps reduce lookahead bias by using only trailing data before each rebalance date.
 
+The backtest assumes **End-of-Day Execution**:
+
+- **Timing:** Rebalancing occurs at the close of the rebalance date. Data up to and including that date is used for decision-making.
+- **Realization:** The return on the rebalance date itself is realized using the *previous* weights. The new weights apply to returns starting from the following day.
+- **Costs:** Transaction costs and slippage are subtracted from the portfolio value on the first day of the new period.
+
 Even with walk-forward design, the backtest still assumes:
 
 - historical market conditions are informative

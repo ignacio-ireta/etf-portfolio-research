@@ -152,7 +152,7 @@ Each metric is defined with plain-English meaning, formula-level summary, good/b
 
 **Plain-English meaning:** How much of the portfolio changed at rebalances on average.
 
-**Formula-level summary:** Average sum of absolute weight changes across rebalance dates.
+**Formula-level summary:** Average gross traded-weight change across rebalance-to-rebalance transitions, excluding the initial allocation from cash.
 
 **Good/bad interpretation:** Lower usually means fewer trades, lower costs, and less tax drag.
 

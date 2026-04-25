@@ -156,7 +156,7 @@ def test_backtest_run_record_artifact_shas_match_final_files(tmp_path: Path) -> 
     processed_dir = tmp_path / "data/processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
     prices.to_parquet(processed_dir / "prices_validated.parquet")
-    prices.pct_change().dropna().to_parquet(processed_dir / "returns.parquet")
+    prices.pct_change(fill_method=None).dropna().to_parquet(processed_dir / "returns.parquet")
 
     cli.run_backtest("configs/base.yaml", project_root=tmp_path, lookback_periods=5)
 
@@ -189,7 +189,7 @@ def test_backtest_passes_configured_risk_model_to_walk_forward_covariance(
     processed_dir = tmp_path / "data/processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
     prices.to_parquet(processed_dir / "prices_validated.parquet")
-    prices.pct_change().dropna().to_parquet(processed_dir / "returns.parquet")
+    prices.pct_change(fill_method=None).dropna().to_parquet(processed_dir / "returns.parquet")
 
     original_calculate_covariance_matrix = engine.calculate_covariance_matrix
     covariance_methods: list[str] = []
@@ -234,7 +234,7 @@ def test_backtest_outputs_each_configured_benchmark_objective(tmp_path: Path) ->
     processed_dir = tmp_path / "data/processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
     prices.to_parquet(processed_dir / "prices_validated.parquet")
-    prices.pct_change().dropna().to_parquet(processed_dir / "returns.parquet")
+    prices.pct_change(fill_method=None).dropna().to_parquet(processed_dir / "returns.parquet")
 
     cli.run_backtest("configs/base.yaml", project_root=tmp_path, lookback_periods=5)
 
@@ -281,7 +281,7 @@ def test_backtest_outputs_each_configured_secondary_benchmark(tmp_path: Path) ->
     processed_dir = tmp_path / "data/processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
     prices.to_parquet(processed_dir / "prices_validated.parquet")
-    prices.pct_change().dropna().to_parquet(processed_dir / "returns.parquet")
+    prices.pct_change(fill_method=None).dropna().to_parquet(processed_dir / "returns.parquet")
 
     cli.run_backtest("configs/base.yaml", project_root=tmp_path, lookback_periods=5)
 
@@ -522,7 +522,7 @@ def test_apply_backtest_window_filters_asset_and_benchmark_returns(tmp_path: Pat
     config_path.write_text(config_text, encoding="utf-8")
     config = load_config(config_path)
 
-    returns = _make_prices().pct_change().dropna()
+    returns = _make_prices().pct_change(fill_method=None).dropna()
     asset_returns = cli._asset_returns(returns, config)
     benchmark_returns = cli._benchmark_returns(returns, config)
 
@@ -540,7 +540,7 @@ def test_apply_backtest_window_filters_asset_and_benchmark_returns(tmp_path: Pat
 
 def test_backtest_start_date_changes_first_eligible_rebalance_date(tmp_path: Path) -> None:
     _write_project_files(tmp_path)
-    returns = _make_prices().pct_change().dropna()
+    returns = _make_prices().pct_change(fill_method=None).dropna()
     config_path = tmp_path / "configs/base.yaml"
 
     early_config = load_config(config_path)
@@ -637,6 +637,56 @@ def test_run_optimize_respects_shared_metadata_constraints(
     assert frontier_calls[0]["asset_class_bounds"] is not None
     assert frontier_calls[0]["asset_class_bounds"]["fixed_income"] == (0.10, 0.45)
     assert frontier_calls[0]["asset_class_bounds"]["real_estate"] == (0.0, 0.10)
+
+
+def test_run_optimize_logs_sharpe_after_configured_risk_free_rate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _write_project_files(tmp_path)
+    config_path = tmp_path / "configs/base.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            "optimization:\n",
+            "risk_free:\n  source: constant\n  value: 0.03\noptimization:\n",
+        ),
+        encoding="utf-8",
+    )
+    returns_path = tmp_path / "data/processed/returns.parquet"
+    returns_path.parent.mkdir(parents=True, exist_ok=True)
+    _make_prices().pct_change(fill_method=None).dropna().to_parquet(returns_path)
+
+    expected_returns = pd.Series({"VTI": 0.12, "BND": 0.12, "IAU": 0.12}, dtype=float)
+    covariance_matrix = pd.DataFrame(
+        np.diag([0.04, 0.04, 0.04]),
+        index=expected_returns.index,
+        columns=expected_returns.index,
+        dtype=float,
+    )
+    log_events: list[dict[str, object]] = []
+
+    monkeypatch.setattr(cli, "estimate_expected_returns", lambda *args, **kwargs: expected_returns)
+    monkeypatch.setattr(
+        cli,
+        "calculate_covariance_matrix",
+        lambda *args, **kwargs: covariance_matrix,
+    )
+    monkeypatch.setattr(cli, "build_efficient_frontier_figure", lambda *args, **kwargs: go.Figure())
+
+    def capture_log_event(*args, **kwargs):
+        log_events.append({"event": args[2], **kwargs})
+
+    monkeypatch.setattr(cli, "log_event", capture_log_event)
+
+    cli.run_optimize("configs/base.yaml", project_root=tmp_path)
+
+    completion = next(
+        event
+        for event in log_events
+        if event.get("event") == "pipeline_stage_completed" and event.get("stage") == "optimize"
+    )
+    expected_sharpe = (0.12 - 0.03) / float((1 / 3) ** 0.5 * 0.2)
+    assert completion["portfolio_sharpe"] == pytest.approx(expected_sharpe)
 
 
 def _write_constrained_optimize_project_files(project_root: Path) -> None:

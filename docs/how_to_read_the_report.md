@@ -136,6 +136,8 @@ ETF names can hide concentration. Exposure tables make the underlying structure 
 
 This section compares the researched portfolio against benchmark alternatives.
 
+Note that **optimized benchmarks** (like Equal-Weight, Inverse-Volatility, or Min-Variance) are configured to use the same **rebalance mode** (e.g., contribution-only) and **contribution amount** as your main strategy. This ensures you are comparing different allocation "brains" under the same operational "rules."
+
 Use it to ask:
 
 - did the strategy outperform or underperform historically?

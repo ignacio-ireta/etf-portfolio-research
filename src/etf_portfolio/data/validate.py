@@ -57,7 +57,7 @@ def validate_price_data(
     normalized = _normalize_price_frame(prices)
     _validate_index_and_columns(normalized)
     _validate_non_empty_columns(normalized)
-    _validate_non_negative_prices(normalized)
+    _validate_strictly_positive_observed_prices(normalized)
 
     missing_data_fraction = normalized.isna().mean()
     if (missing_data_fraction > max_missing_fraction).any():
@@ -123,6 +123,8 @@ def cross_check_price_data(
 
     primary_normalized = _normalize_price_frame(primary_prices)
     reference_normalized = _normalize_price_frame(reference_prices)
+    _validate_strictly_positive_observed_prices(primary_normalized)
+    _validate_strictly_positive_observed_prices(reference_normalized)
 
     common_tickers = primary_normalized.columns.intersection(reference_normalized.columns)
     if common_tickers.empty:
@@ -216,11 +218,11 @@ def _validate_non_empty_columns(prices: pd.DataFrame) -> None:
         raise ValueError(f"Entirely null price columns found: {empty_columns}.")
 
 
-def _validate_non_negative_prices(prices: pd.DataFrame) -> None:
-    """Reject impossible negative prices."""
+def _validate_strictly_positive_observed_prices(prices: pd.DataFrame) -> None:
+    """Reject non-positive observed prices while allowing configured missing data."""
 
-    if (prices < 0).fillna(False).any().any():
-        raise ValueError("Negative prices found in the input price data.")
+    if (prices <= 0).fillna(False).any().any():
+        raise ValueError("Observed prices must be strictly positive.")
 
 
 def _normalize_metadata(metadata: pd.DataFrame) -> pd.DataFrame:
@@ -268,7 +270,7 @@ def _validate_benchmark_overlap(prices: pd.DataFrame, benchmark_ticker: str) -> 
 def _flag_suspicious_jumps(prices: pd.DataFrame, *, max_jump_abs_return: float) -> pd.DataFrame:
     """Return one-day absolute returns that exceed the configured threshold."""
 
-    absolute_returns = prices.pct_change().abs()
+    absolute_returns = prices.pct_change(fill_method=None).abs()
     flagged = absolute_returns.stack().rename("abs_return").reset_index()
     flagged.columns = ["date", "ticker", "abs_return"]
     return flagged.loc[flagged["abs_return"] > max_jump_abs_return].reset_index(drop=True)

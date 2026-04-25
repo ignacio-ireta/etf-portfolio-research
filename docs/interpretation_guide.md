@@ -148,6 +148,10 @@ Sharpe ratio is useful, but it should not be the only decision metric.
 
 Turnover shows how much the portfolio trades.
 
+In this project, turnover means gross traded-weight change across assets.
+The summary value averages rebalance-to-rebalance changes and excludes the
+initial allocation from cash.
+
 High turnover can mean:
 
 - higher transaction costs

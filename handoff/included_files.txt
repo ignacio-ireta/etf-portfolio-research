@@ -24,6 +24,7 @@
 ./docs/trust_and_safety.md
 ./handoff/generate_handoff_bundle.txt
 ./handoff/included_files.txt
+./handoff/preflight_summary.json
 ./handoff/pytest.txt
 ./handoff/ruff_check.txt
 ./handoff/ruff_format_check.txt
@@ -46,11 +47,7 @@
 ./reports/figures/weighted_expense_over_time.png
 ./reports/html/latest_report.html
 ./reports/metrics/backtest_metrics.json
-./reports/runs/backtest_run-all-20260424T175044Z-3777911e.json
-./reports/runs/backtest_run-all-20260424T223726Z-b15143d6.json
-./reports/runs/backtest_run-all-20260425T011014Z-e4361d4e.json
-./reports/runs/backtest_run-all-20260425T030757Z-e0405b76.json
-./reports/runs/backtest_run-all-20260425T031057Z-a024d06f.json
+./reports/runs/backtest_run-all-20260425T082645Z-fb48ff0e.json
 ./scripts/generate_handoff_bundle.py
 ./src/etf_portfolio/__init__.py
 ./src/etf_portfolio/backtesting/contributions.py
@@ -101,6 +98,7 @@
 ./tests/unit/test_data_semantics.py
 ./tests/unit/test_estimators.py
 ./tests/unit/test_etf_universe_metadata_schema.py
+./tests/unit/test_generate_handoff_bundle.py
 ./tests/unit/test_guided_examples_docs.py
 ./tests/unit/test_metric_dictionary.py
 ./tests/unit/test_metrics_json.py
@@ -110,6 +108,7 @@
 ./tests/unit/test_optimization_objectives.py
 ./tests/unit/test_optimizer.py
 ./tests/unit/test_provider_cross_check.py
+./tests/unit/test_rebalancing_edge_cases.py
 ./tests/unit/test_report_generation.py
 ./tests/unit/test_returns.py
 ./tests/unit/test_risk_analysis.py

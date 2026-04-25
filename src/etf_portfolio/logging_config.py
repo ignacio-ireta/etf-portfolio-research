@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import math
+import numbers
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -30,7 +32,7 @@ class JsonFormatter(logging.Formatter):
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
 
-        return json.dumps(payload, sort_keys=True)
+        return json.dumps(payload, sort_keys=True, allow_nan=False)
 
 
 def configure_logging(level: int = logging.INFO) -> None:
@@ -81,6 +83,9 @@ def _normalize_log_value(value: Any) -> Any:
         return {str(key): _normalize_log_value(item) for key, item in value.items()}
     if isinstance(value, (list, tuple, set)):
         return [_normalize_log_value(item) for item in value]
+    if isinstance(value, numbers.Real) and not isinstance(value, bool):
+        scalar = float(value)
+        return scalar if math.isfinite(scalar) else None
     return value
 
 

@@ -111,7 +111,10 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
         good_bad_interpretation=(
             "Higher is generally better; below zero means underperforming cash."
         ),
-        caveats="Penalizes upside and downside volatility equally.",
+        caveats=(
+            "Penalizes upside and downside volatility equally. If volatility is zero or "
+            "undefined, the pipeline reports 0.0 rather than NaN or Infinity."
+        ),
     ),
     MetricDefinition(
         name="Sortino Ratio",
@@ -119,7 +122,10 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
         plain_english="Return earned per unit of downside volatility.",
         formula_summary="Annualized excess return divided by annualized downside deviation.",
         good_bad_interpretation="Higher is generally better when downside risk matters most.",
-        caveats="Can be unstable when there are few negative observations.",
+        caveats=(
+            "Can be unstable when there are few negative observations. If downside "
+            "deviation is zero or undefined, the pipeline reports 0.0."
+        ),
     ),
     MetricDefinition(
         name="Max Drawdown",
@@ -147,7 +153,10 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
         plain_english="Compounded return compared with the worst drawdown.",
         formula_summary="CAGR divided by absolute value of maximum drawdown.",
         good_bad_interpretation="Higher is generally better if the drawdown estimate is credible.",
-        caveats="Very sensitive to one worst drawdown observation.",
+        caveats=(
+            "Very sensitive to one worst drawdown observation. If maximum drawdown is zero "
+            "or undefined, the pipeline reports 0.0."
+        ),
     ),
     MetricDefinition(
         name="Turnover",
@@ -223,7 +232,10 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
             "Beta above 1 moved more than the benchmark; below 1 moved less; near 0 moved "
             "independently."
         ),
-        caveats="Beta depends on the chosen benchmark and historical window.",
+        caveats=(
+            "Beta depends on the chosen benchmark and historical window. If benchmark "
+            "variance is zero or undefined, the pipeline reports 0.0."
+        ),
     ),
     MetricDefinition(
         name="Alpha",
@@ -246,7 +258,10 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
         good_bad_interpretation=(
             "Lower means benchmark-like behavior; higher means more benchmark-relative risk."
         ),
-        caveats="Low tracking error is not automatically good if the benchmark is unsuitable.",
+        caveats=(
+            "Low tracking error is not automatically good if the benchmark is unsuitable. "
+            "With fewer than two aligned observations, the pipeline reports 0.0."
+        ),
     ),
     MetricDefinition(
         name="Information Ratio",
@@ -254,7 +269,10 @@ METRIC_DEFINITIONS: tuple[MetricDefinition, ...] = (
         plain_english="Benchmark-relative return per unit of tracking error.",
         formula_summary="Average active return divided by active return volatility, annualized.",
         good_bad_interpretation="Higher is better for benchmark-relative strategies.",
-        caveats="Can be unstable when tracking error is very small.",
+        caveats=(
+            "Can be unstable when tracking error is very small. If tracking error is zero "
+            "or undefined, the pipeline reports 0.0."
+        ),
     ),
     MetricDefinition(
         name="Rolling Volatility",

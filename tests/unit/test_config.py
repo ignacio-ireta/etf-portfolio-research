@@ -58,6 +58,7 @@ def test_load_config_reads_revised_base_yaml() -> None:
     assert config.rebalance.fallback is not None
     assert config.costs.transaction_cost_bps == 2
     assert config.tracking.artifact_dir == "reports/runs"
+    assert config.tracking.require_git_commit is True
     assert config.ml.enabled is False
     assert config.ml.target == "forward_return"
     assert config.ml.models == ["historical_mean", "ridge", "random_forest"]

@@ -102,7 +102,7 @@ Each metric is defined with plain-English meaning, formula-level summary, good/b
 
 **Good/bad interpretation:** Higher is generally better; below zero means underperforming cash.
 
-**Caveats:** Penalizes upside and downside volatility equally.
+**Caveats:** Penalizes upside and downside volatility equally. If volatility is zero or undefined, the pipeline reports 0.0 rather than NaN or Infinity.
 
 ### Sortino Ratio
 
@@ -112,7 +112,7 @@ Each metric is defined with plain-English meaning, formula-level summary, good/b
 
 **Good/bad interpretation:** Higher is generally better when downside risk matters most.
 
-**Caveats:** Can be unstable when there are few negative observations.
+**Caveats:** Can be unstable when there are few negative observations. If downside deviation is zero or undefined, the pipeline reports 0.0.
 
 ### Calmar Ratio
 
@@ -122,7 +122,7 @@ Each metric is defined with plain-English meaning, formula-level summary, good/b
 
 **Good/bad interpretation:** Higher is generally better if the drawdown estimate is credible.
 
-**Caveats:** Very sensitive to one worst drawdown observation.
+**Caveats:** Very sensitive to one worst drawdown observation. If maximum drawdown is zero or undefined, the pipeline reports 0.0.
 
 ## Drawdown
 
@@ -232,7 +232,7 @@ Each metric is defined with plain-English meaning, formula-level summary, good/b
 
 **Good/bad interpretation:** Beta above 1 moved more than the benchmark; below 1 moved less; near 0 moved independently.
 
-**Caveats:** Beta depends on the chosen benchmark and historical window.
+**Caveats:** Beta depends on the chosen benchmark and historical window. If benchmark variance is zero or undefined, the pipeline reports 0.0.
 
 ### Alpha
 
@@ -252,7 +252,7 @@ Each metric is defined with plain-English meaning, formula-level summary, good/b
 
 **Good/bad interpretation:** Lower means benchmark-like behavior; higher means more benchmark-relative risk.
 
-**Caveats:** Low tracking error is not automatically good if the benchmark is unsuitable.
+**Caveats:** Low tracking error is not automatically good if the benchmark is unsuitable. With fewer than two aligned observations, the pipeline reports 0.0.
 
 ### Information Ratio
 
@@ -262,7 +262,7 @@ Each metric is defined with plain-English meaning, formula-level summary, good/b
 
 **Good/bad interpretation:** Higher is better for benchmark-relative strategies.
 
-**Caveats:** Can be unstable when tracking error is very small.
+**Caveats:** Can be unstable when tracking error is very small. If tracking error is zero or undefined, the pipeline reports 0.0.
 
 ## Rolling Risk
 

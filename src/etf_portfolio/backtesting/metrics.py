@@ -1,4 +1,10 @@
-"""Portfolio backtesting metrics."""
+"""Portfolio backtesting metrics.
+
+Undefined ratio policy: metrics with undefined denominators return ``0.0`` rather
+than NaN or Infinity. This covers one-observation samples, flat series, zero
+benchmark variance, zero tracking error, zero volatility, and zero drawdown.
+Non-finite input observations are rejected with ``ValueError``.
+"""
 
 from __future__ import annotations
 
@@ -9,14 +15,18 @@ import pandas as pd
 
 from etf_portfolio.features.returns import annualized_return, max_drawdown
 
+UNDEFINED_METRIC_VALUE = 0.0
+
 
 def calculate_beta(asset_returns: pd.Series, benchmark_returns: pd.Series) -> float:
     """Compute beta of an asset or portfolio series relative to a benchmark."""
 
     aligned_returns, aligned_benchmark = _align_series(asset_returns, benchmark_returns)
+    if len(aligned_returns) < 2:
+        return UNDEFINED_METRIC_VALUE
     benchmark_variance = aligned_benchmark.var(ddof=1)
-    if np.isclose(benchmark_variance, 0.0):
-        raise ValueError("Benchmark variance must be non-zero to calculate beta.")
+    if not np.isfinite(benchmark_variance) or np.isclose(benchmark_variance, 0.0):
+        return UNDEFINED_METRIC_VALUE
     return float(aligned_returns.cov(aligned_benchmark) / benchmark_variance)
 
 
@@ -27,7 +37,9 @@ def calculate_portfolio_return(
     """Compute expected portfolio return from weights and asset expected returns."""
 
     aligned_weights = _align_vector(weights, expected_returns, value_name="expected_returns")
-    return float(aligned_weights.dot(expected_returns))
+    _validate_finite_vector(aligned_weights, name="weights")
+    _validate_finite_vector(expected_returns, name="expected_returns")
+    return _finite_float(aligned_weights.dot(expected_returns), name="portfolio_return")
 
 
 def calculate_portfolio_volatility(
@@ -46,8 +58,12 @@ def calculate_portfolio_volatility(
         covariance_matrix.index.to_series(),
         value_name="covariance_matrix",
     )
+    _validate_finite_vector(aligned_weights, name="weights")
     covariance = covariance_matrix.loc[aligned_weights.index, aligned_weights.index]
+    _validate_finite_frame(covariance, name="covariance_matrix")
     variance = float(aligned_weights.T.dot(covariance).dot(aligned_weights))
+    if not np.isfinite(variance):
+        raise ValueError("Portfolio variance must be finite.")
     if variance < -1e-12:
         raise ValueError("Portfolio variance must not be negative.")
     return float(np.sqrt(max(variance, 0.0)))
@@ -60,10 +76,13 @@ def calculate_sharpe_ratio(
 ) -> float:
     """Compute the Sharpe ratio from annualized return and volatility inputs."""
 
+    _validate_finite_scalar(portfolio_return, name="portfolio_return")
+    _validate_finite_scalar(portfolio_volatility, name="portfolio_volatility")
+    _validate_finite_scalar(risk_free_rate, name="risk_free_rate")
     if portfolio_volatility < 0.0:
         raise ValueError("portfolio_volatility must not be negative.")
     if np.isclose(portfolio_volatility, 0.0):
-        return 0.0
+        return UNDEFINED_METRIC_VALUE
     return float((portfolio_return - risk_free_rate) / portfolio_volatility)
 
 
@@ -103,6 +122,8 @@ def portfolio_return(
     aligned_weights = weights.reindex(asset_returns.columns)
     if aligned_weights.isna().any():
         raise ValueError("Weights must align to all asset return columns.")
+    _validate_finite_frame(asset_returns, name="asset_returns")
+    _validate_finite_vector(aligned_weights, name="weights")
 
     return asset_returns.mul(aligned_weights, axis=1).sum(axis=1)
 
@@ -110,8 +131,9 @@ def portfolio_return(
 def portfolio_volatility(returns: pd.Series, *, periods_per_year: int) -> float:
     """Compute annualized portfolio volatility from periodic returns."""
 
-    _validate_non_empty(returns)
-    return float(returns.std(ddof=1) * np.sqrt(periods_per_year))
+    _validate_periods_per_year(periods_per_year)
+    _validate_finite_vector(returns, name="returns")
+    return float(_sample_std(returns) * np.sqrt(periods_per_year))
 
 
 def sharpe_ratio(
@@ -122,12 +144,14 @@ def sharpe_ratio(
 ) -> float:
     """Compute annualized Sharpe ratio from periodic returns."""
 
-    _validate_non_empty(returns)
+    _validate_periods_per_year(periods_per_year)
+    _validate_finite_scalar(risk_free_rate, name="risk_free_rate")
+    _validate_finite_vector(returns, name="returns")
 
     excess_returns = returns - (risk_free_rate / periods_per_year)
-    volatility = returns.std(ddof=1)
+    volatility = _sample_std(returns)
     if np.isclose(volatility, 0.0):
-        return 0.0
+        return UNDEFINED_METRIC_VALUE
     return float(excess_returns.mean() / volatility * np.sqrt(periods_per_year))
 
 
@@ -139,13 +163,15 @@ def sortino_ratio(
 ) -> float:
     """Compute annualized Sortino ratio from periodic returns."""
 
-    _validate_non_empty(returns)
+    _validate_periods_per_year(periods_per_year)
+    _validate_finite_scalar(risk_free_rate, name="risk_free_rate")
+    _validate_finite_vector(returns, name="returns")
 
     excess_returns = returns - (risk_free_rate / periods_per_year)
     downside_returns = np.minimum(excess_returns, 0.0)
     downside_deviation = np.sqrt(np.mean(np.square(downside_returns))) * np.sqrt(periods_per_year)
     if np.isclose(downside_deviation, 0.0):
-        return 0.0
+        return UNDEFINED_METRIC_VALUE
     return float(excess_returns.mean() * periods_per_year / downside_deviation)
 
 
@@ -163,9 +189,10 @@ def tracking_error(
 ) -> float:
     """Compute annualized tracking error from active returns."""
 
+    _validate_periods_per_year(periods_per_year)
     aligned_returns, aligned_benchmark = _align_series(returns, benchmark_returns)
     active_returns = aligned_returns - aligned_benchmark
-    return float(active_returns.std(ddof=1) * np.sqrt(periods_per_year))
+    return float(_sample_std(active_returns) * np.sqrt(periods_per_year))
 
 
 def information_ratio(
@@ -176,18 +203,21 @@ def information_ratio(
 ) -> float:
     """Compute annualized information ratio from active returns."""
 
+    _validate_periods_per_year(periods_per_year)
     aligned_returns, aligned_benchmark = _align_series(returns, benchmark_returns)
     active_returns = aligned_returns - aligned_benchmark
-    active_volatility = active_returns.std(ddof=1)
+    active_volatility = _sample_std(active_returns)
     if np.isclose(active_volatility, 0.0):
-        return 0.0
+        return UNDEFINED_METRIC_VALUE
     return float(active_returns.mean() / active_volatility * np.sqrt(periods_per_year))
 
 
 def cagr(returns: pd.Series, *, periods_per_year: int) -> float:
     """Compute compound annual growth rate from periodic returns."""
 
-    return float(annualized_return(returns, periods_per_year=periods_per_year))
+    _validate_periods_per_year(periods_per_year)
+    _validate_finite_vector(returns, name="returns")
+    return _finite_float(annualized_return(returns, periods_per_year=periods_per_year), name="cagr")
 
 
 def calmar_ratio(returns: pd.Series, *, periods_per_year: int) -> float:
@@ -195,8 +225,9 @@ def calmar_ratio(returns: pd.Series, *, periods_per_year: int) -> float:
 
     growth_rate = cagr(returns, periods_per_year=periods_per_year)
     drawdown = float(max_drawdown(returns))
+    _validate_finite_scalar(drawdown, name="max_drawdown")
     if np.isclose(drawdown, 0.0):
-        return 0.0
+        return UNDEFINED_METRIC_VALUE
     return float(growth_rate / abs(drawdown))
 
 
@@ -205,8 +236,9 @@ def turnover(weights: pd.DataFrame) -> float:
 
     if weights.empty:
         raise ValueError("weights must not be empty.")
+    _validate_finite_frame(weights, name="weights")
     if len(weights.index) == 1:
-        return 0.0
+        return UNDEFINED_METRIC_VALUE
 
     changes = weights.fillna(0.0).diff().iloc[1:].abs().sum(axis=1)
     return float(changes.mean())
@@ -217,6 +249,7 @@ def average_number_of_holdings(weights: pd.DataFrame, *, tolerance: float = 1e-8
 
     if weights.empty:
         raise ValueError("weights must not be empty.")
+    _validate_finite_frame(weights, name="weights")
     return float((weights.abs() > tolerance).sum(axis=1).mean())
 
 
@@ -225,6 +258,7 @@ def largest_position(weights: pd.DataFrame) -> float:
 
     if weights.empty:
         raise ValueError("weights must not be empty.")
+    _validate_finite_frame(weights, name="weights")
     return float(weights.max(axis=1).max())
 
 
@@ -233,6 +267,7 @@ def herfindahl_concentration_index(weights: pd.DataFrame) -> float:
 
     if weights.empty:
         raise ValueError("weights must not be empty.")
+    _validate_finite_frame(weights, name="weights")
     return float(weights.pow(2).sum(axis=1).mean())
 
 
@@ -406,8 +441,8 @@ def _align_series(
     benchmark_returns: pd.Series,
 ) -> tuple[pd.Series, pd.Series]:
     aligned_returns, aligned_benchmark = returns.align(benchmark_returns, join="inner")
-    _validate_non_empty(aligned_returns)
-    _validate_non_empty(aligned_benchmark)
+    _validate_finite_vector(aligned_returns, name="returns")
+    _validate_finite_vector(aligned_benchmark, name="benchmark_returns")
     return aligned_returns, aligned_benchmark
 
 
@@ -435,6 +470,54 @@ def _align_vector(
 def _validate_non_empty(data: pd.Series | pd.DataFrame) -> None:
     if data.empty:
         raise ValueError("Input data must not be empty.")
+
+
+def _validate_periods_per_year(periods_per_year: int) -> None:
+    if periods_per_year <= 0:
+        raise ValueError("periods_per_year must be positive.")
+
+
+def _validate_finite_scalar(value: float, *, name: str) -> None:
+    try:
+        scalar = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be numeric and finite.") from exc
+    if not np.isfinite(scalar):
+        raise ValueError(f"{name} must be finite.")
+
+
+def _validate_finite_vector(values: pd.Series, *, name: str) -> None:
+    _validate_non_empty(values)
+    try:
+        array = values.to_numpy(dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must contain only numeric finite values.") from exc
+    if not np.isfinite(array).all():
+        raise ValueError(f"{name} must contain only finite values.")
+
+
+def _validate_finite_frame(values: pd.DataFrame, *, name: str) -> None:
+    _validate_non_empty(values)
+    try:
+        array = values.to_numpy(dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must contain only numeric finite values.") from exc
+    if not np.isfinite(array).all():
+        raise ValueError(f"{name} must contain only finite values.")
+
+
+def _sample_std(values: pd.Series) -> float:
+    if len(values) < 2:
+        return UNDEFINED_METRIC_VALUE
+    result = float(values.std(ddof=1))
+    return result if np.isfinite(result) else UNDEFINED_METRIC_VALUE
+
+
+def _finite_float(value: float, *, name: str) -> float:
+    result = float(value)
+    if not np.isfinite(result):
+        raise ValueError(f"{name} must be finite.")
+    return result
 
 
 def _aggregate_periodic_returns(returns: pd.Series, frequency: str) -> pd.Series:

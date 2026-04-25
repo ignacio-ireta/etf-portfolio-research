@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -50,6 +49,7 @@ from etf_portfolio.tracking import (
     build_run_record,
     generate_run_id,
     relative_to_project_root,
+    resolve_run_provenance,
     write_run_record,
 )
 
@@ -402,6 +402,11 @@ def run_backtest(
 
     config = _load_project_config(config_path, project_root)
     stage_run_id = run_id or generate_run_id("backtest")
+    tracking_provenance = (
+        resolve_run_provenance(config=config, project_root=project_root)
+        if persist_metrics
+        else None
+    )
     returns = pd.read_parquet(project_root / "data/processed/returns.parquet")
     validated_prices_path = project_root / "data/processed/prices_validated.parquet"
     validated_prices = (
@@ -546,7 +551,7 @@ def run_backtest(
             if validated_prices is not None
             else None
         ),
-        assumptions=_report_assumptions(config, method),
+        assumptions=_report_assumptions(config, method, run_id=stage_run_id),
         limitations=_report_limitations(config),
         asset_returns=asset_returns,
         asset_classes=asset_class_map,
@@ -583,6 +588,8 @@ def run_backtest(
         "optimized_strategy": strategy_metrics_payload,
         "benchmarks": metrics_by_strategy,
     }
+    if tracking_provenance is not None:
+        metrics_payload["provenance_status"] = tracking_provenance["provenance_status"]
     if persist_metrics:
         metrics_path.parent.mkdir(parents=True, exist_ok=True)
         run_record_path = (
@@ -732,6 +739,7 @@ def run_ml(
         raise ValueError("ML is disabled in the current config.")
 
     stage_run_id = run_id or generate_run_id("ml")
+    tracking_provenance = resolve_run_provenance(config=config, project_root=project_root)
     returns = pd.read_parquet(project_root / "data/processed/returns.parquet")
     asset_returns = _asset_returns(returns, config)
     benchmark_returns = _benchmark_returns(returns, config)
@@ -836,7 +844,7 @@ def run_ml(
         governance=governance,
         summary=evaluation.summary,
     )
-    governance_path.write_text(json.dumps(governance, indent=2, sort_keys=True), encoding="utf-8")
+    write_metrics_json(governance, governance_path)
 
     metrics_payload = {
         "run_id": stage_run_id,
@@ -853,6 +861,7 @@ def run_ml(
         "summary": evaluation.summary.round(6).to_dict(orient="records"),
         "fold_count": int(evaluation.fold_metrics["fold"].nunique()),
         "governance": governance,
+        "provenance_status": tracking_provenance["provenance_status"],
     }
     run_record_path = project_root / config.tracking.artifact_dir / f"ml_{stage_run_id}.json"
     metrics_payload["run_record"] = relative_to_project_root(project_root, run_record_path)
@@ -1044,8 +1053,13 @@ def _required_tickers(config: AppConfig) -> list[str]:
     return list(dict.fromkeys(tickers))
 
 
-def _report_assumptions(config: AppConfig, optimization_method: str) -> dict[str, str]:
-    return {
+def _report_assumptions(
+    config: AppConfig,
+    optimization_method: str,
+    *,
+    run_id: str | None = None,
+) -> dict[str, str]:
+    assumptions = {
         "data_provider": f"Data provider: {config.data.provider}",
         "benchmark": f"Primary benchmark: {config.benchmark.primary}",
         "optimization_method": f"Optimization method: {optimization_method}",
@@ -1086,6 +1100,9 @@ def _report_assumptions(config: AppConfig, optimization_method: str) -> dict[str
             f"Annualized risk-free rate ({config.risk_free.source}): {config.risk_free.value:.2%}"
         ),
     }
+    if run_id is not None:
+        assumptions["run_id"] = f"Run ID: {run_id}"
+    return assumptions
 
 
 def _report_limitations(config: AppConfig) -> list[str]:
@@ -1409,7 +1426,7 @@ def _write_validation_summary(summary: Any, output_path: Path) -> None:
         "history_coverage": summary.history_coverage.round(6).to_dict(),
         "suspicious_jump_count": int(len(summary.suspicious_jumps)),
     }
-    output_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    write_metrics_json(payload, output_path)
 
 
 def _select_best_ml_model(summary: pd.DataFrame, *, task: str) -> str:

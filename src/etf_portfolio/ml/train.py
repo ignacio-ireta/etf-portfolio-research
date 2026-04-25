@@ -131,6 +131,8 @@ def sanitize_json_payload(payload: Any, *, allow_nan: bool = False) -> Any:
             )
             for key, value in payload.items()
         }
+    if isinstance(payload, pd.DataFrame):
+        return sanitize_json_payload(payload.to_dict(orient="records"), allow_nan=allow_nan)
     if isinstance(payload, pd.Index):
         return [sanitize_json_payload(value, allow_nan=allow_nan) for value in payload.tolist()]
     if isinstance(payload, np.ndarray):
@@ -160,7 +162,9 @@ def _flatten_numeric(payload: dict[str, Any], prefix: str = "") -> dict[str, flo
         if isinstance(value, dict):
             flattened.update(_flatten_numeric(value, prefix=full_key))
         elif isinstance(value, (int, float)):
-            flattened[full_key] = float(value)
+            numeric = float(value)
+            if math.isfinite(numeric):
+                flattened[full_key] = numeric
     return flattened
 
 

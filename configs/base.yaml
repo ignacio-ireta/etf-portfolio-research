@@ -136,6 +136,7 @@ risk_free:
 
 tracking:
   artifact_dir: reports/runs
+  require_git_commit: true
 
 ml:
   enabled: false

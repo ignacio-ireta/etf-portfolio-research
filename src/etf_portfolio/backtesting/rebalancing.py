@@ -182,6 +182,7 @@ def _apply_tolerance_band(
                 contribution_amount=contribution_amount,
                 fallback_sell_allowed=False,
                 fallback_drift_threshold=None,
+                force_sell_rebalance=False,
             )
         return RebalanceDecision(
             mode="tolerance_band",

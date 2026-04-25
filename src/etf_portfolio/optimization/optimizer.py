@@ -46,6 +46,8 @@ OptimizationMethod = Literal[
 
 LOGGER = get_logger(__name__)
 DEFAULT_SOLVER = "SLSQP"
+COVARIANCE_SYMMETRY_TOLERANCE = 1e-10
+COVARIANCE_PSD_TOLERANCE = 1e-10
 
 
 def optimize_portfolio(
@@ -100,6 +102,7 @@ def optimize_portfolio(
         min_weight=min_weight,
         max_weight=max_weight,
         weight_sum=weight_sum,
+        risk_free_rate=risk_free_rate,
         target_return=target_return,
         target_volatility=target_volatility,
     )
@@ -240,6 +243,7 @@ def _validate_inputs(
     min_weight: float,
     max_weight: float,
     weight_sum: float,
+    risk_free_rate: float,
     target_return: float | None,
     target_volatility: float | None,
 ) -> tuple[pd.Index, pd.Series, pd.DataFrame]:
@@ -247,10 +251,22 @@ def _validate_inputs(
         raise ValueError("expected_returns must not be empty.")
     if covariance_matrix.empty:
         raise ValueError("covariance_matrix must not be empty.")
+    if covariance_matrix.shape[0] != covariance_matrix.shape[1]:
+        raise ValueError("covariance_matrix must be square.")
     if not covariance_matrix.index.equals(covariance_matrix.columns):
         raise ValueError("covariance_matrix index and columns must match.")
     if not expected_returns.index.equals(covariance_matrix.index):
         raise ValueError("expected_returns and covariance_matrix must align on the same assets.")
+    if expected_returns.index.has_duplicates:
+        raise ValueError("expected_returns index must not contain duplicate assets.")
+    if covariance_matrix.index.has_duplicates:
+        raise ValueError("covariance_matrix index must not contain duplicate assets.")
+    if not np.isfinite(expected_returns.to_numpy(dtype=float)).all():
+        raise ValueError("expected_returns must contain only finite values.")
+    _validate_finite_scalar(weight_sum, name="weight_sum")
+    _validate_finite_scalar(min_weight, name="min_weight")
+    _validate_finite_scalar(max_weight, name="max_weight")
+    _validate_finite_scalar(risk_free_rate, name="risk_free_rate")
     if weight_sum <= 0.0:
         raise ValueError("weight_sum must be positive.")
     if max_weight <= 0.0 or max_weight > 1.0:
@@ -265,12 +281,71 @@ def _validate_inputs(
         raise ValueError("target_volatility is required when method='target_volatility'.")
     if target_volatility is not None and target_volatility <= 0.0:
         raise ValueError("target_volatility must be positive.")
+    _validate_finite_optional(target_return, name="target_return")
+    _validate_finite_optional(target_volatility, name="target_volatility")
 
+    validated_covariance = _validate_and_repair_covariance_matrix(
+        covariance_matrix.astype(float).loc[expected_returns.index, expected_returns.index],
+        method=method,
+    )
     return (
         expected_returns.index,
         expected_returns.astype(float),
-        covariance_matrix.astype(float).loc[expected_returns.index, expected_returns.index],
+        validated_covariance,
     )
+
+
+def _validate_and_repair_covariance_matrix(
+    covariance_matrix: pd.DataFrame,
+    *,
+    method: OptimizationMethod,
+) -> pd.DataFrame:
+    """Validate optimizer covariance input and repair only tiny numerical PSD drift."""
+
+    values = covariance_matrix.to_numpy(dtype=float)
+    if not np.isfinite(values).all():
+        raise ValueError("covariance_matrix must contain only finite values.")
+    if not np.allclose(values, values.T, atol=COVARIANCE_SYMMETRY_TOLERANCE, rtol=0.0):
+        raise ValueError("covariance_matrix must be symmetric within tolerance.")
+
+    symmetric_values = (values + values.T) / 2.0
+    diagonal = np.diag(symmetric_values)
+    if np.any(diagonal < -COVARIANCE_PSD_TOLERANCE):
+        raise ValueError("covariance_matrix diagonal variances must not be negative.")
+    if method == "inverse_volatility" and np.any(diagonal <= COVARIANCE_PSD_TOLERANCE):
+        raise ValueError(
+            "covariance_matrix diagonal variances must be positive for inverse_volatility."
+        )
+
+    eigenvalues, eigenvectors = np.linalg.eigh(symmetric_values)
+    min_eigenvalue = float(eigenvalues.min())
+    if min_eigenvalue < -COVARIANCE_PSD_TOLERANCE:
+        raise ValueError("covariance_matrix must be positive semidefinite within tolerance.")
+    if min_eigenvalue < 0.0:
+        repaired_values = (eigenvectors * np.maximum(eigenvalues, 0.0)) @ eigenvectors.T
+        symmetric_values = (repaired_values + repaired_values.T) / 2.0
+
+    return pd.DataFrame(
+        symmetric_values,
+        index=covariance_matrix.index,
+        columns=covariance_matrix.columns,
+        dtype=float,
+    )
+
+
+def _validate_finite_optional(value: float | None, *, name: str) -> None:
+    if value is None:
+        return
+    _validate_finite_scalar(value, name=name)
+
+
+def _validate_finite_scalar(value: float, *, name: str) -> None:
+    try:
+        scalar = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be numeric and finite.") from exc
+    if not np.isfinite(scalar):
+        raise ValueError(f"{name} must be finite.")
 
 
 def _initial_weights(

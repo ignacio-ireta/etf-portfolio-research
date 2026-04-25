@@ -10,6 +10,7 @@ import pandas as pd
 
 from etf_portfolio.config import AppConfig
 from etf_portfolio.ml.dataset import MLDataset
+from etf_portfolio.ml.train import sanitize_json_payload
 from etf_portfolio.tracking import file_sha256
 
 
@@ -191,7 +192,11 @@ def write_model_card(
         [
             "",
             "## Evaluation Summary",
-            json.dumps(summary_rows, indent=2),
+            json.dumps(
+                sanitize_json_payload(summary_rows, allow_nan=False),
+                indent=2,
+                allow_nan=False,
+            ),
             "",
             "## Rollback Path",
             "- Revert to the historical_mean baseline and the prior approved model artifact.",

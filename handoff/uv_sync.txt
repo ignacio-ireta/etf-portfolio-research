@@ -1,7 +1,6 @@
-Command: uv sync --group dev
+Command: uv sync --group dev --frozen
 Working directory: /Users/astridlysheim/Projects/etf-portfolio-research
-Started UTC: 2026-04-25T03:10:48Z
-Resolved 132 packages in 2ms
-Checked 128 packages in 2ms
-Finished UTC: 2026-04-25T03:10:48Z
+Started UTC: 2026-04-25T08:22:27Z
+Checked 128 packages in 1ms
+Finished UTC: 2026-04-25T08:22:27Z
 Exit code: 0

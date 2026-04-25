@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from etf_portfolio.optimization.optimizer import OptimizationMethod
 
 ObjectiveFn = Callable[[np.ndarray], float]
+MAX_SHARPE_INVALID_PENALTY = 1e9
 
 
 def build_objective_function(
@@ -86,9 +87,17 @@ def _negative_sharpe_objective(
 ) -> ObjectiveFn:
     def negative_sharpe(weights: np.ndarray) -> float:
         portfolio_variance = float(weights.T.dot(sigma).dot(weights))
-        # Use a small epsilon to keep the objective differentiable and avoid division by zero.
-        portfolio_vol = np.sqrt(max(portfolio_variance, 1e-12))
+        if not np.isfinite(portfolio_variance) or portfolio_variance < 0.0:
+            return MAX_SHARPE_INVALID_PENALTY
+
+        portfolio_vol = float(np.sqrt(portfolio_variance))
+        if not np.isfinite(portfolio_vol) or np.isclose(portfolio_vol, 0.0):
+            return MAX_SHARPE_INVALID_PENALTY
+
         portfolio_return = float(weights.dot(mu))
+        if not np.isfinite(portfolio_return) or not np.isfinite(risk_free_rate):
+            return MAX_SHARPE_INVALID_PENALTY
+
         return -float((portfolio_return - risk_free_rate) / portfolio_vol)
 
     return negative_sharpe

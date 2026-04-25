@@ -73,11 +73,13 @@ def test_cli_pipeline_stages_create_expected_artifacts(
     assert "NaN" not in backtest_metrics_text
     metrics_payload = json.loads(backtest_metrics_text)
     assert metrics_payload["run_id"].startswith("backtest-")
+    assert metrics_payload["provenance_status"] == "tracked"
     assert Path(metrics_payload["run_record"]).exists()
     assert not Path(metrics_payload["run_record"]).is_absolute()
     run_record = json.loads((tmp_path / metrics_payload["run_record"]).read_text(encoding="utf-8"))
     assert run_record["git_commit_hash"]
     assert len(run_record["git_commit_hash"]) == 40
+    assert run_record["provenance_status"] == "tracked"
     assert run_record["data_version"]["path"] == "data/processed/returns.parquet"
     assert not Path(run_record["data_version"]["path"]).is_absolute()
     for artifact in run_record["output_artifacts"].values():
@@ -120,6 +122,7 @@ def test_cli_pipeline_stages_create_expected_artifacts(
     assert "NaN" not in ml_metrics_text
     ml_metrics_payload = json.loads(ml_metrics_text)
     assert ml_metrics_payload["run_id"].startswith("ml-")
+    assert ml_metrics_payload["provenance_status"] == "tracked"
     assert ml_metrics_payload["model_artifact"] == "reports/ml/model_train_split.pkl"
     assert ml_metrics_payload["model_training_scope"] == "train_split"
     assert (
@@ -133,6 +136,7 @@ def test_cli_pipeline_stages_create_expected_artifacts(
     )
     assert ml_run_record["git_commit_hash"]
     assert len(ml_run_record["git_commit_hash"]) == 40
+    assert ml_run_record["provenance_status"] == "tracked"
     for artifact in ml_run_record["output_artifacts"].values():
         artifact_path = Path(artifact["path"])
         assert not artifact_path.is_absolute()
@@ -210,6 +214,52 @@ def test_backtest_run_record_artifact_shas_match_final_files(tmp_path: Path) -> 
         artifact_path = tmp_path / artifact["path"]
         assert artifact_path.exists()
         assert artifact["sha256"] == file_sha256(artifact_path)
+
+
+def test_backtest_strict_tracking_fails_before_metrics_without_git(tmp_path: Path) -> None:
+    _write_project_files(tmp_path)
+    prices = _make_prices()
+    processed_dir = tmp_path / "data/processed"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    prices.to_parquet(processed_dir / "prices_validated.parquet")
+    prices.pct_change(fill_method=None).dropna().to_parquet(processed_dir / "returns.parquet")
+
+    with pytest.raises(RuntimeError, match="tracking.require_git_commit=false"):
+        cli.run_backtest("configs/base.yaml", project_root=tmp_path, lookback_periods=5)
+
+    assert not (tmp_path / "reports/metrics/backtest_metrics.json").exists()
+    assert not (tmp_path / "reports/runs").exists()
+
+
+def test_backtest_preview_tracking_allows_non_git_run_with_explicit_status(
+    tmp_path: Path,
+) -> None:
+    _write_project_files(tmp_path)
+    config_path = tmp_path / "configs/base.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            "  require_git_commit: true\n",
+            "  require_git_commit: false\n",
+        ),
+        encoding="utf-8",
+    )
+    prices = _make_prices()
+    processed_dir = tmp_path / "data/processed"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    prices.to_parquet(processed_dir / "prices_validated.parquet")
+    prices.pct_change(fill_method=None).dropna().to_parquet(processed_dir / "returns.parquet")
+
+    cli.run_backtest("configs/base.yaml", project_root=tmp_path, lookback_periods=5)
+
+    metrics_payload = json.loads(
+        (tmp_path / "reports/metrics/backtest_metrics.json").read_text(encoding="utf-8")
+    )
+    run_record = json.loads((tmp_path / metrics_payload["run_record"]).read_text(encoding="utf-8"))
+    assert metrics_payload["provenance_status"] == "untracked_preview"
+    assert run_record["provenance_status"] == "untracked_preview"
+    assert run_record["git_commit_hash"] is None
+    assert "reproducible" not in json.dumps(metrics_payload).lower()
+    assert "reproducible" not in json.dumps(run_record).lower()
 
 
 def test_backtest_passes_configured_risk_model_to_walk_forward_covariance(
@@ -446,6 +496,7 @@ costs:
   slippage_bps: 1
 tracking:
   artifact_dir: reports/runs
+  require_git_commit: true
 ml:
   enabled: true
   task: regression

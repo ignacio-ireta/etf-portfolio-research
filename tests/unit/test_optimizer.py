@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -166,6 +167,91 @@ def test_optimizer_rejects_missing_target_return() -> None:
             make_covariance_matrix(),
             method="target_return",
         )
+
+
+def test_optimizer_rejects_nonfinite_expected_returns_before_slsqp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("SLSQP should not run for invalid numerical inputs")
+
+    monkeypatch.setattr("etf_portfolio.optimization.optimizer.minimize", fail_if_called)
+    expected_returns = make_expected_returns()
+    expected_returns["VTI"] = np.nan
+
+    with pytest.raises(ValueError, match="expected_returns.*finite"):
+        optimize_portfolio(
+            expected_returns,
+            make_covariance_matrix(),
+            method="max_sharpe",
+        )
+
+
+def test_optimizer_rejects_covariance_shape_alignment_symmetry_and_finiteness() -> None:
+    expected_returns = pd.Series({"AAA": 0.10, "BBB": 0.05})
+
+    covariance_not_square = pd.DataFrame(
+        [[0.04, 0.01, 0.00], [0.01, 0.09, 0.00]],
+        index=["AAA", "BBB"],
+        columns=["AAA", "BBB", "CCC"],
+    )
+    with pytest.raises(ValueError, match="square"):
+        optimize_portfolio(expected_returns, covariance_not_square, method="min_variance")
+
+    covariance_misaligned = pd.DataFrame(
+        [[0.04, 0.01], [0.01, 0.09]],
+        index=["AAA", "CCC"],
+        columns=["AAA", "CCC"],
+    )
+    with pytest.raises(ValueError, match="align"):
+        optimize_portfolio(expected_returns, covariance_misaligned, method="min_variance")
+
+    covariance_asymmetric = pd.DataFrame(
+        [[0.04, 0.01], [0.02, 0.09]],
+        index=expected_returns.index,
+        columns=expected_returns.index,
+    )
+    with pytest.raises(ValueError, match="symmetric"):
+        optimize_portfolio(expected_returns, covariance_asymmetric, method="min_variance")
+
+    covariance_nonfinite = pd.DataFrame(
+        [[0.04, np.inf], [np.inf, 0.09]],
+        index=expected_returns.index,
+        columns=expected_returns.index,
+    )
+    with pytest.raises(ValueError, match="finite"):
+        optimize_portfolio(expected_returns, covariance_nonfinite, method="min_variance")
+
+
+def test_optimizer_rejects_materially_non_psd_covariance_before_slsqp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("SLSQP should not run for invalid numerical inputs")
+
+    monkeypatch.setattr("etf_portfolio.optimization.optimizer.minimize", fail_if_called)
+    expected_returns = pd.Series({"AAA": 0.10, "BBB": 0.05})
+    covariance = pd.DataFrame(
+        [[1.0, 2.0], [2.0, 1.0]],
+        index=expected_returns.index,
+        columns=expected_returns.index,
+    )
+
+    with pytest.raises(ValueError, match="positive semidefinite"):
+        optimize_portfolio(expected_returns, covariance, method="min_variance")
+
+
+def test_optimizer_repairs_tiny_psd_drift_within_tolerance() -> None:
+    expected_returns = pd.Series({"AAA": 0.10, "BBB": 0.05})
+    covariance = pd.DataFrame(
+        [[1.0, 1.0 + 5e-11], [1.0 + 5e-11, 1.0]],
+        index=expected_returns.index,
+        columns=expected_returns.index,
+    )
+
+    weights = optimize_portfolio(expected_returns, covariance, method="min_variance")
+
+    assert weights.sum() == pytest.approx(1.0, abs=1e-8)
 
 
 def test_frontier_returns_feasible_points() -> None:

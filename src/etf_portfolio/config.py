@@ -373,6 +373,7 @@ class RiskFreeConfig(BaseModel):
 
 class RunTrackingConfig(BaseModel):
     artifact_dir: str = "reports/runs"
+    require_git_commit: bool = True
 
     @field_validator("artifact_dir")
     @classmethod

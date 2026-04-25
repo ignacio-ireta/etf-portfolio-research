@@ -4,6 +4,13 @@ Reproducible ETF portfolio research pipeline for universe definition, data inges
 
 This project is a research tool, not financial advice. It is designed to make ETF portfolio assumptions visible, reproducible, and easier to challenge.
 
+## Project Overview
+
+- **Purpose:** A reproducible ETF portfolio research system to compare allocation strategies under explicit, documented assumptions.
+- **Audience:** Researchers and investors who want to audit the trade-offs between different ETF portfolio rules.
+- **Out of Scope:** Live trading, broker execution, tax advice, legal advice, or personalized financial advice.
+- **Quality Bar:** No lookahead bias, reproducible runs, versioned configs, and empirically tested portfolio math.
+
 ## Start Here
 
 If you are new to the project or to portfolio analytics, start with the beginner learning path:
@@ -99,9 +106,14 @@ uv run python scripts/generate_handoff_bundle.py
 ```
 
 The command writes `handoff_bundle.zip` and refreshes
-`handoff/included_files.txt`. The bundle includes source, tests, docs,
-configuration, the Makefile, `uv.lock`, generated reports, handoff logs,
-processed parquet data, and the bundle-generation script itself.
+`handoff/included_files.txt`.
+
+### Bundle Properties
+
+- **Offline-Reportable:** YES. The bundle includes the generated HTML/Excel reports and figures.
+- **Offline-Reproducible (Downstream):** YES. The bundle includes `data/processed/*.parquet`, allowing a recipient to re-run the `optimize`, `backtest`, and `report` stages without a data provider.
+- **Offline-Reproducible (Full):** NO. `data/raw/prices.parquet` is excluded to keep bundle size manageable. Re-running the `ingest` stage requires internet access to the configured data provider (e.g., yfinance).
+- **Source-Only:** NO. The bundle is a functional research environment including data and environment locks.
 
 ## Example Output
 

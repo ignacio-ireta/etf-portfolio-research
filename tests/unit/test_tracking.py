@@ -26,6 +26,30 @@ def test_build_run_record_requires_git_commit(tmp_path: Path) -> None:
         )
 
 
+def test_build_run_record_marks_untracked_preview_without_git(tmp_path: Path) -> None:
+    artifact_path = tmp_path / "reports/metrics.json"
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_text("{}", encoding="utf-8")
+    config = load_config("configs/base.yaml")
+    preview_config = config.model_copy(
+        update={
+            "tracking": config.tracking.model_copy(update={"require_git_commit": False}),
+        }
+    )
+
+    record = build_run_record(
+        stage="backtest",
+        run_id="backtest-preview",
+        config=preview_config,
+        project_root=tmp_path,
+        data_version_path=None,
+        output_artifacts={"metrics": artifact_path},
+    )
+
+    assert record["git_commit_hash"] is None
+    assert record["provenance_status"] == "untracked_preview"
+
+
 def test_build_run_record_uses_commit_hash_and_relative_artifact_paths(tmp_path: Path) -> None:
     commit_hash = _initialize_git_repo(tmp_path)
     artifact_path = tmp_path / "reports/metrics.json"
@@ -45,6 +69,7 @@ def test_build_run_record_uses_commit_hash_and_relative_artifact_paths(tmp_path:
     )
 
     assert record["git_commit_hash"] == commit_hash
+    assert record["provenance_status"] == "tracked"
     assert record["data_version"]["path"] == "data/processed/returns.parquet"
     assert record["output_artifacts"]["metrics"]["path"] == "reports/metrics.json"
     assert not Path(record["output_artifacts"]["metrics"]["path"]).is_absolute()

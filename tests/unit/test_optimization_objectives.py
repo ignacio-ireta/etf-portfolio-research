@@ -76,7 +76,69 @@ def test_max_sharpe_objective_handles_zero_volatility_safely() -> None:
     )
     objective_value = fn(np.array([0.5, 0.5]))
     assert np.isfinite(objective_value)
-    assert objective_value == pytest.approx(-70_000.0)
+    assert objective_value == pytest.approx(1e9)
+
+
+def test_max_sharpe_objective_handles_near_zero_volatility_safely() -> None:
+    expected = pd.Series({"AAA": 0.10, "BBB": 0.04})
+    sigma = pd.DataFrame(
+        np.diag([1e-24, 1e-24]),
+        index=expected.index,
+        columns=expected.index,
+    )
+    fn = build_objective_function(
+        method="max_sharpe",
+        expected_returns=expected,
+        covariance_matrix=sigma,
+        risk_free_rate=0.0,
+    )
+    objective_value = fn(np.array([0.5, 0.5]))
+    assert np.isfinite(objective_value)
+    assert objective_value == pytest.approx(1e9)
+
+
+@pytest.mark.parametrize(
+    ("expected", "sigma"),
+    [
+        (
+            pd.Series({"AAA": np.nan, "BBB": 0.04}),
+            pd.DataFrame(
+                [[0.04, 0.0], [0.0, 0.01]],
+                index=["AAA", "BBB"],
+                columns=["AAA", "BBB"],
+            ),
+        ),
+        (
+            pd.Series({"AAA": 0.10, "BBB": 0.04}),
+            pd.DataFrame(
+                [[np.nan, 0.0], [0.0, 0.01]],
+                index=["AAA", "BBB"],
+                columns=["AAA", "BBB"],
+            ),
+        ),
+        (
+            pd.Series({"AAA": 0.10, "BBB": 0.04}),
+            pd.DataFrame(
+                [[np.inf, 0.0], [0.0, 0.01]],
+                index=["AAA", "BBB"],
+                columns=["AAA", "BBB"],
+            ),
+        ),
+    ],
+)
+def test_max_sharpe_objective_handles_non_finite_inputs_safely(
+    expected: pd.Series,
+    sigma: pd.DataFrame,
+) -> None:
+    fn = build_objective_function(
+        method="max_sharpe",
+        expected_returns=expected,
+        covariance_matrix=sigma,
+        risk_free_rate=0.0,
+    )
+    objective_value = fn(np.array([0.5, 0.5]))
+    assert np.isfinite(objective_value)
+    assert objective_value == pytest.approx(1e9)
 
 
 def test_target_volatility_objective_maximizes_return() -> None:

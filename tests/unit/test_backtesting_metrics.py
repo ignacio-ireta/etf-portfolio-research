@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pandas as pd
 import pandas.testing as pdt
 import pytest
@@ -203,6 +204,49 @@ def test_zero_denominator_ratios_are_finite_for_flat_returns() -> None:
 
     assert ratios == [0.0, 0.0, 0.0]
     assert all(math.isfinite(ratio) for ratio in ratios)
+
+
+def test_one_observation_metrics_use_documented_zero_for_undefined_cases() -> None:
+    returns = pd.Series([0.01], index=pd.date_range("2024-01-31", periods=1, freq="ME"))
+    benchmark = pd.Series([0.01], index=returns.index)
+
+    metrics = [
+        portfolio_volatility(returns, periods_per_year=12),
+        sharpe_ratio(returns, periods_per_year=12),
+        sortino_ratio(returns, periods_per_year=12),
+        calmar_ratio(returns, periods_per_year=12),
+        beta(returns, benchmark),
+        tracking_error(returns, benchmark, periods_per_year=12),
+        information_ratio(returns, benchmark, periods_per_year=12),
+    ]
+
+    assert metrics == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    assert all(math.isfinite(metric) for metric in metrics)
+
+
+def test_flat_benchmark_relative_metrics_are_finite() -> None:
+    returns = pd.Series(
+        [0.01, 0.01, 0.01],
+        index=pd.date_range("2024-01-31", periods=3, freq="ME"),
+    )
+    benchmark = pd.Series([0.0, 0.0, 0.0], index=returns.index)
+
+    assert beta(returns, benchmark) == 0.0
+    assert tracking_error(returns, returns, periods_per_year=12) == 0.0
+    assert information_ratio(returns, returns, periods_per_year=12) == 0.0
+
+
+def test_metrics_reject_nonfinite_inputs() -> None:
+    returns = pd.Series(
+        [0.01, np.nan, 0.02],
+        index=pd.date_range("2024-01-31", periods=3, freq="ME"),
+    )
+
+    with pytest.raises(ValueError, match="finite"):
+        sharpe_ratio(returns, periods_per_year=12)
+
+    with pytest.raises(ValueError, match="risk_free_rate must be finite"):
+        calculate_sharpe_ratio(0.10, 0.20, float("inf"))
 
 
 def test_calmar_ratio_returns_zero_for_no_drawdown_series() -> None:

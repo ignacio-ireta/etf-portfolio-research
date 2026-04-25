@@ -12,6 +12,9 @@ from uuid import uuid4
 
 from etf_portfolio.config import AppConfig
 
+TRACKED_PROVENANCE_STATUS = "tracked"
+UNTRACKED_PREVIEW_PROVENANCE_STATUS = "untracked_preview"
+
 
 def generate_run_id(stage: str) -> str:
     """Create a sortable run identifier for a pipeline stage."""
@@ -36,12 +39,8 @@ def build_run_record(
 ) -> dict[str, Any]:
     """Build a normalized run record for any research stage."""
 
-    git_commit_hash = current_git_commit_hash(project_root)
-    if git_commit_hash is None:
-        raise RuntimeError(
-            "Run records require a real git commit. Run from a git repository with at least "
-            "one commit before generating tracked artifacts."
-        )
+    provenance = resolve_run_provenance(config=config, project_root=project_root)
+    git_commit_hash = provenance["git_commit_hash"]
 
     output_manifest = {
         name: _artifact_record(project_root, Path(path)) for name, path in output_artifacts.items()
@@ -51,6 +50,7 @@ def build_run_record(
         "stage": stage,
         "timestamp_utc": datetime.now(UTC).isoformat(),
         "git_commit_hash": git_commit_hash,
+        "provenance_status": provenance["provenance_status"],
         "config_hash": config_hash(config),
         "data_version": (
             _artifact_record(project_root, data_version_path)
@@ -75,6 +75,28 @@ def build_run_record(
     return record
 
 
+def resolve_run_provenance(*, config: AppConfig, project_root: Path) -> dict[str, str | None]:
+    """Resolve run provenance according to the configured tracking policy."""
+
+    git_commit_hash = current_git_commit_hash(project_root)
+    if config.tracking.require_git_commit:
+        if git_commit_hash is None:
+            raise RuntimeError(
+                "Run tracking requires a real git commit. Run from a git repository with at "
+                "least one commit, or set tracking.require_git_commit=false for an explicitly "
+                "untracked preview run."
+            )
+        return {
+            "git_commit_hash": git_commit_hash,
+            "provenance_status": TRACKED_PROVENANCE_STATUS,
+        }
+
+    return {
+        "git_commit_hash": git_commit_hash,
+        "provenance_status": UNTRACKED_PREVIEW_PROVENANCE_STATUS,
+    }
+
+
 def write_run_record(record: dict[str, Any], *, artifact_dir: Path) -> Path:
     """Persist a run record and return the written path."""
 
@@ -95,7 +117,12 @@ def write_run_record(record: dict[str, Any], *, artifact_dir: Path) -> Path:
 
 
 def config_hash(config: AppConfig) -> str:
-    payload = json.dumps(config.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    payload = json.dumps(
+        config.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -156,6 +183,7 @@ __all__ = [
     "file_sha256",
     "generate_run_id",
     "relative_to_project_root",
+    "resolve_run_provenance",
     "universe_id",
     "write_run_record",
 ]

@@ -1,0 +1,359 @@
+{
+  "artifact_paths_included": [
+    ".github/workflows/ci.yml",
+    "Makefile",
+    "README.md",
+    "configs/base.yaml",
+    "configs/constraints_long_only.yaml",
+    "configs/universe_global_core.yaml",
+    "configs/universe_us_core.yaml",
+    "data/metadata/etf_universe.csv",
+    "data/processed/prices_validated.parquet",
+    "data/processed/returns.parquet",
+    "docs/architecture.md",
+    "docs/assumptions_and_limitations.md",
+    "docs/data_dictionary.md",
+    "docs/glossary.md",
+    "docs/guided_examples.md",
+    "docs/how_to_read_the_report.md",
+    "docs/interpretation_guide.md",
+    "docs/methodology.md",
+    "docs/metric_dictionary.md",
+    "docs/model_card.md",
+    "docs/research_log.md",
+    "docs/runbook.md",
+    "docs/start_here.md",
+    "docs/trust_and_safety.md",
+    "handoff/generate_handoff_bundle.txt",
+    "handoff/included_files.txt",
+    "handoff/preflight_summary.json",
+    "handoff/pytest.txt",
+    "handoff/ruff_check.txt",
+    "handoff/ruff_format_check.txt",
+    "handoff/run_all.txt",
+    "handoff/uv_sync.txt",
+    "pyproject.toml",
+    "reports/excel/optimized_portfolios.xlsx",
+    "reports/excel/portfolio_results.xlsx",
+    "reports/figures/asset_class_exposure.png",
+    "reports/figures/benchmark_comparison.png",
+    "reports/figures/cumulative_returns.png",
+    "reports/figures/drawdown.png",
+    "reports/figures/efficient_frontier.png",
+    "reports/figures/portfolio_weights.png",
+    "reports/figures/region_exposure.png",
+    "reports/figures/rolling_correlation.png",
+    "reports/figures/rolling_sharpe.png",
+    "reports/figures/rolling_volatility.png",
+    "reports/figures/stress_periods.png",
+    "reports/figures/weighted_expense_over_time.png",
+    "reports/html/latest_report.html",
+    "reports/metrics/backtest_metrics.json",
+    "reports/runs/backtest_run-all-20260425T082645Z-fb48ff0e.json",
+    "scripts/generate_handoff_bundle.py",
+    "src/etf_portfolio/__init__.py",
+    "src/etf_portfolio/backtesting/contributions.py",
+    "src/etf_portfolio/backtesting/costs.py",
+    "src/etf_portfolio/backtesting/engine.py",
+    "src/etf_portfolio/backtesting/metrics.py",
+    "src/etf_portfolio/backtesting/rebalancing.py",
+    "src/etf_portfolio/cli.py",
+    "src/etf_portfolio/config.py",
+    "src/etf_portfolio/data/ingest.py",
+    "src/etf_portfolio/data/providers.py",
+    "src/etf_portfolio/data/schemas.py",
+    "src/etf_portfolio/data/validate.py",
+    "src/etf_portfolio/features/estimators.py",
+    "src/etf_portfolio/features/returns.py",
+    "src/etf_portfolio/features/risk_free.py",
+    "src/etf_portfolio/logging_config.py",
+    "src/etf_portfolio/metric_dictionary.py",
+    "src/etf_portfolio/ml/dataset.py",
+    "src/etf_portfolio/ml/evaluate.py",
+    "src/etf_portfolio/ml/governance.py",
+    "src/etf_portfolio/ml/registry.py",
+    "src/etf_portfolio/ml/train.py",
+    "src/etf_portfolio/optimization/constraints.py",
+    "src/etf_portfolio/optimization/frontier.py",
+    "src/etf_portfolio/optimization/objectives.py",
+    "src/etf_portfolio/optimization/optimizer.py",
+    "src/etf_portfolio/reporting/plots.py",
+    "src/etf_portfolio/reporting/report.py",
+    "src/etf_portfolio/reporting/tables.py",
+    "src/etf_portfolio/risk/attribution.py",
+    "src/etf_portfolio/risk/drawdown.py",
+    "src/etf_portfolio/risk/exposure.py",
+    "src/etf_portfolio/risk/stress.py",
+    "src/etf_portfolio/tracking.py",
+    "src/etf_portfolio/trust_safety.py",
+    "tests/regression/__init__.py",
+    "tests/regression/test_ml_dataset_leakage.py",
+    "tests/regression/test_no_lookahead_backtest.py",
+    "tests/unit/test_attribution.py",
+    "tests/unit/test_backtest_interpretation.py",
+    "tests/unit/test_backtesting_metrics.py",
+    "tests/unit/test_cli_asset_class_constraints.py",
+    "tests/unit/test_cli_pipeline.py",
+    "tests/unit/test_config.py",
+    "tests/unit/test_contribution_rebalancer.py",
+    "tests/unit/test_data_ingestion.py",
+    "tests/unit/test_data_semantics.py",
+    "tests/unit/test_estimators.py",
+    "tests/unit/test_etf_universe_metadata_schema.py",
+    "tests/unit/test_generate_handoff_bundle.py",
+    "tests/unit/test_guided_examples_docs.py",
+    "tests/unit/test_metric_dictionary.py",
+    "tests/unit/test_metrics_json.py",
+    "tests/unit/test_ml_dataset.py",
+    "tests/unit/test_ml_pipeline.py",
+    "tests/unit/test_optimization_constraints.py",
+    "tests/unit/test_optimization_objectives.py",
+    "tests/unit/test_optimizer.py",
+    "tests/unit/test_provider_cross_check.py",
+    "tests/unit/test_rebalancing_edge_cases.py",
+    "tests/unit/test_report_generation.py",
+    "tests/unit/test_returns.py",
+    "tests/unit/test_risk_analysis.py",
+    "tests/unit/test_risk_free_wiring.py",
+    "tests/unit/test_tiingo_provider.py",
+    "tests/unit/test_tolerance_band_rebalancer.py",
+    "tests/unit/test_tracking.py",
+    "tests/unit/test_trust_safety.py",
+    "tests/unit/test_walk_forward_backtest.py",
+    "uv.lock"
+  ],
+  "artifacts": {
+    "metrics_path": "reports/metrics/backtest_metrics.json",
+    "run_all_log": "handoff/run_all.txt",
+    "run_id": "run-all-20260425T082645Z-fb48ff0e",
+    "run_record_path": "reports/runs/backtest_run-all-20260425T082645Z-fb48ff0e.json",
+    "verified_output_artifacts": {
+      "figure_asset_class_exposure": {
+        "mtime_utc": "2026-04-25T08:27:12Z",
+        "path": "reports/figures/asset_class_exposure.png",
+        "sha256": "8218cba735de8fba3fd9e1da064446e579091b4e6cff8035070af112ca427563"
+      },
+      "figure_benchmark_comparison": {
+        "mtime_utc": "2026-04-25T08:27:08Z",
+        "path": "reports/figures/benchmark_comparison.png",
+        "sha256": "5964674495275388a645de1600c7a310b9acc8ddfdda88fd361271be31643431"
+      },
+      "figure_cumulative_returns": {
+        "mtime_utc": "2026-04-25T08:26:57Z",
+        "path": "reports/figures/cumulative_returns.png",
+        "sha256": "0efe8072433ffce7052b50a51d334a549aa2e8156a1c253683fa0076b6f91092"
+      },
+      "figure_drawdown": {
+        "mtime_utc": "2026-04-25T08:26:59Z",
+        "path": "reports/figures/drawdown.png",
+        "sha256": "fd5fb93ff5b7cf0dec2bb81a4cde593dc9702a0af0d7abb0dac35e58d2ae10f0"
+      },
+      "figure_efficient_frontier": {
+        "mtime_utc": "2026-04-25T08:26:55Z",
+        "path": "reports/figures/efficient_frontier.png",
+        "sha256": "f57d85d5fea86db35af1a109b10c3b0ddc65022c6af97ec0c524122c410af129"
+      },
+      "figure_portfolio_weights": {
+        "mtime_utc": "2026-04-25T08:27:02Z",
+        "path": "reports/figures/portfolio_weights.png",
+        "sha256": "b556614e3a6cc1d5b88a8d5dbc122307784332671afb168fb35ad0bae3234e8f"
+      },
+      "figure_region_exposure": {
+        "mtime_utc": "2026-04-25T08:27:14Z",
+        "path": "reports/figures/region_exposure.png",
+        "sha256": "460cc4c9c7b9faca4de24e6ffff0e5a67bf32e0c8ed29a00a58f2be435d16688"
+      },
+      "figure_rolling_correlation": {
+        "mtime_utc": "2026-04-25T08:27:10Z",
+        "path": "reports/figures/rolling_correlation.png",
+        "sha256": "82107ba8fc0a01c1dce8e1baba781af7e5784ffd1d64d0ae34ba996071e9c389"
+      },
+      "figure_rolling_sharpe": {
+        "mtime_utc": "2026-04-25T08:27:06Z",
+        "path": "reports/figures/rolling_sharpe.png",
+        "sha256": "8e3c5875e061cb1a7a42ead63fe66c0d3048f41a599453138ac7854069c3b073"
+      },
+      "figure_rolling_volatility": {
+        "mtime_utc": "2026-04-25T08:27:04Z",
+        "path": "reports/figures/rolling_volatility.png",
+        "sha256": "aaaf9bcea5a18572d73885fd32d25838f6149ba1a4e617d6b5d42f6a1ee619df"
+      },
+      "figure_stress_periods": {
+        "mtime_utc": "2026-04-25T08:27:18Z",
+        "path": "reports/figures/stress_periods.png",
+        "sha256": "eb44a08b4e531b1a6d586ec56deee0a6aa2cff8b8f65ffe1eddb7849980e5a55"
+      },
+      "figure_weighted_expense_over_time": {
+        "mtime_utc": "2026-04-25T08:27:16Z",
+        "path": "reports/figures/weighted_expense_over_time.png",
+        "sha256": "45544bade1abf74992de75d34e13f80446721c25072d6a139d7ed9c4c11251e4"
+      },
+      "metrics": {
+        "mtime_utc": "2026-04-25T08:27:18Z",
+        "path": "reports/metrics/backtest_metrics.json",
+        "sha256": "3769ac5a4e770f65191a417732e3cab96142ec66680ed38dfb10158eeb799690"
+      },
+      "report": {
+        "mtime_utc": "2026-04-25T08:26:53Z",
+        "path": "reports/html/latest_report.html",
+        "sha256": "c8dc7c38002a7c6aa0362d9fed93a29954462154f33fbe9b93c4928eb0cdc6b1"
+      },
+      "workbook": {
+        "mtime_utc": "2026-04-25T08:26:53Z",
+        "path": "reports/excel/portfolio_results.xlsx",
+        "sha256": "3e3efc17a8aa2728bb15cc337c28a268fbc441c374adf37d9023d003ce294210"
+      }
+    }
+  },
+  "freshness": {
+    "checked_source_files": [
+      "pyproject.toml",
+      "uv.lock",
+      "README.md",
+      "Makefile"
+    ],
+    "checked_source_roots": [
+      "src",
+      "tests",
+      "configs",
+      "docs",
+      "scripts"
+    ],
+    "logs": {
+      "pytest": {
+        "mtime_utc": "2026-04-25T08:26:44Z",
+        "path": "handoff/pytest.txt"
+      },
+      "ruff_check": {
+        "mtime_utc": "2026-04-25T08:22:27Z",
+        "path": "handoff/ruff_check.txt"
+      },
+      "ruff_format_check": {
+        "mtime_utc": "2026-04-25T08:22:27Z",
+        "path": "handoff/ruff_format_check.txt"
+      },
+      "run_all": {
+        "mtime_utc": "2026-04-25T08:27:18Z",
+        "path": "handoff/run_all.txt"
+      }
+    },
+    "newest_source_file": "tests/unit/test_rebalancing_edge_cases.py",
+    "newest_source_timestamp": "2026-04-25T08:22:20Z"
+  },
+  "generated_at": "2026-04-25T08:27:18Z",
+  "git_commit": "e83389d06eecc4822f3aac6d074ee74f53f99cb0",
+  "latest_run_id": "run-all-20260425T082645Z-fb48ff0e",
+  "newest_source_path": "tests/unit/test_rebalancing_edge_cases.py",
+  "newest_source_timestamp": "2026-04-25T08:22:20Z",
+  "status": "pass",
+  "validation_commands": {
+    "pytest": {
+      "command": [
+        "uv",
+        "run",
+        "pytest",
+        "-q"
+      ],
+      "exit_code": 0,
+      "finished_utc": "2026-04-25T08:26:44Z",
+      "mtime_utc": "2026-04-25T08:26:44Z",
+      "path": "handoff/pytest.txt",
+      "started_utc": "2026-04-25T08:22:27Z"
+    },
+    "ruff_check": {
+      "command": [
+        "uv",
+        "run",
+        "ruff",
+        "check",
+        "."
+      ],
+      "exit_code": 0,
+      "finished_utc": "2026-04-25T08:22:27Z",
+      "mtime_utc": "2026-04-25T08:22:27Z",
+      "path": "handoff/ruff_check.txt",
+      "started_utc": "2026-04-25T08:22:27Z"
+    },
+    "ruff_format_check": {
+      "command": [
+        "uv",
+        "run",
+        "ruff",
+        "format",
+        "--check",
+        "."
+      ],
+      "exit_code": 0,
+      "finished_utc": "2026-04-25T08:22:27Z",
+      "mtime_utc": "2026-04-25T08:22:27Z",
+      "path": "handoff/ruff_format_check.txt",
+      "started_utc": "2026-04-25T08:22:27Z"
+    },
+    "run_all": {
+      "command": [
+        "uv",
+        "run",
+        "etf-portfolio",
+        "run-all",
+        "--config",
+        "configs/base.yaml"
+      ],
+      "exit_code": 0,
+      "finished_utc": "2026-04-25T08:27:18Z",
+      "mtime_utc": "2026-04-25T08:27:18Z",
+      "path": "handoff/run_all.txt",
+      "started_utc": "2026-04-25T08:26:44Z"
+    },
+    "uv_sync": {
+      "command": [
+        "uv",
+        "sync",
+        "--group",
+        "dev",
+        "--frozen"
+      ],
+      "exit_code": 0,
+      "finished_utc": "2026-04-25T08:22:27Z",
+      "mtime_utc": "2026-04-25T08:22:27Z",
+      "path": "handoff/uv_sync.txt",
+      "started_utc": "2026-04-25T08:22:27Z"
+    }
+  },
+  "validation_log_timestamps": {
+    "pytest": {
+      "exit_code": 0,
+      "finished_utc": "2026-04-25T08:26:44Z",
+      "mtime_utc": "2026-04-25T08:26:44Z",
+      "path": "handoff/pytest.txt",
+      "started_utc": "2026-04-25T08:22:27Z"
+    },
+    "ruff_check": {
+      "exit_code": 0,
+      "finished_utc": "2026-04-25T08:22:27Z",
+      "mtime_utc": "2026-04-25T08:22:27Z",
+      "path": "handoff/ruff_check.txt",
+      "started_utc": "2026-04-25T08:22:27Z"
+    },
+    "ruff_format_check": {
+      "exit_code": 0,
+      "finished_utc": "2026-04-25T08:22:27Z",
+      "mtime_utc": "2026-04-25T08:22:27Z",
+      "path": "handoff/ruff_format_check.txt",
+      "started_utc": "2026-04-25T08:22:27Z"
+    },
+    "run_all": {
+      "exit_code": 0,
+      "finished_utc": "2026-04-25T08:27:18Z",
+      "mtime_utc": "2026-04-25T08:27:18Z",
+      "path": "handoff/run_all.txt",
+      "started_utc": "2026-04-25T08:26:44Z"
+    },
+    "uv_sync": {
+      "exit_code": 0,
+      "finished_utc": "2026-04-25T08:22:27Z",
+      "mtime_utc": "2026-04-25T08:22:27Z",
+      "path": "handoff/uv_sync.txt",
+      "started_utc": "2026-04-25T08:22:27Z"
+    }
+  }
+}

@@ -247,7 +247,10 @@ def test_backtest_passes_configured_risk_model_to_walk_forward_covariance(
     assert set(covariance_methods) == {"ledoit_wolf"}
 
 
-def test_backtest_outputs_each_configured_benchmark_objective(tmp_path: Path) -> None:
+def test_backtest_outputs_each_configured_benchmark_objective(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _write_project_files(tmp_path)
     config_path = tmp_path / "configs/base.yaml"
     config_text = config_path.read_text(encoding="utf-8")
@@ -276,6 +279,35 @@ def test_backtest_outputs_each_configured_benchmark_objective(tmp_path: Path) ->
     processed_dir.mkdir(parents=True, exist_ok=True)
     prices.to_parquet(processed_dir / "prices_validated.parquet")
     prices.pct_change(fill_method=None).dropna().to_parquet(processed_dir / "returns.parquet")
+
+    def stable_backtest_result(
+        asset_returns: pd.DataFrame,
+        *,
+        rebalance_dates: pd.DatetimeIndex,
+        optimization_method: str,
+        initial_capital: float = 1.0,
+        realized_constraint_policy: str = "report_drift",
+        **kwargs,
+    ) -> engine.WalkForwardBacktestResult:
+        del optimization_method, kwargs
+        weights = pd.Series(1.0 / len(asset_returns.columns), index=asset_returns.columns)
+        selected_dates = pd.DatetimeIndex(rebalance_dates).intersection(asset_returns.index)
+        if selected_dates.empty:
+            selected_dates = pd.DatetimeIndex([asset_returns.index[-1]])
+        weight_frame = pd.DataFrame([weights] * len(selected_dates), index=selected_dates)
+        weight_frame.index.name = "rebalance_date"
+        portfolio_returns = asset_returns.mul(weights, axis=1).sum(axis=1)
+        portfolio_value = initial_capital * (1.0 + portfolio_returns).cumprod()
+        return engine.WalkForwardBacktestResult(
+            portfolio_returns=portfolio_returns,
+            target_weights=weight_frame,
+            applied_weights=weight_frame,
+            rebalance_summary=pd.DataFrame(index=selected_dates),
+            portfolio_value=portfolio_value,
+            realized_constraint_policy=realized_constraint_policy,
+        )
+
+    monkeypatch.setattr(cli, "run_walk_forward_backtest", stable_backtest_result)
 
     cli.run_backtest("configs/base.yaml", project_root=tmp_path, lookback_periods=5)
 

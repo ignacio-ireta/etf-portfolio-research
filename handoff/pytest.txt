@@ -1,14 +1,18 @@
 Command: uv run pytest -q
 Working directory: /Users/astridlysheim/Projects/etf-portfolio-research
-Started UTC: 2026-04-25T03:16:17Z
+Started UTC: 2026-04-25T03:27:48Z
 ........................................................................ [ 27%]
 ........................................................................ [ 55%]
 ........................................................................ [ 82%]
-.............................................                            [100%]{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T03:20:16.120560+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T03:20:16.120703+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T03:20:16.120857+00:00"}
-{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T03:20:16.120892+00:00"}
+.............................................                            [100%]{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T03:31:45.098666+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T03:31:45.098814+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T03:31:45.098963+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T03:31:45.098995+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T03:31:45.099018+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T03:31:45.099041+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "TemporaryDirectory.cleanup() worked.", "timestamp_utc": "2026-04-25T03:31:45.099059+00:00"}
+{"level": "INFO", "logger": "choreographer.utils._tmpfile", "message": "shutil.rmtree worked.", "timestamp_utc": "2026-04-25T03:31:45.099079+00:00"}
 
-261 passed in 238.55s (0:03:58)
-Finished UTC: 2026-04-25T03:20:16Z
+261 passed in 236.50s (0:03:56)
+Finished UTC: 2026-04-25T03:31:45Z
 Exit code: 0

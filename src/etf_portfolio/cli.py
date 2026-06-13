@@ -1179,7 +1179,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--continue",
         dest="fail_fast",
         action="store_false",
-        help="Attempt remaining independent stages after a failure.",
+        help="Attempt remaining stages that do not depend on a failed stage's outputs.",
     )
 
     return parser

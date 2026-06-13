@@ -130,12 +130,17 @@ are organized (`tests/conftest.py`), how to regenerate golden files
 
 `ruff` (lint + format, expanded rule set), `mypy` (lenient/gradual on `src`),
 `pytest` + `pytest-cov`, `pip-audit`, and `pre-commit`. Run locally with
-`make check` or `uv run pre-commit run --all-files`.
+`make check` or `uv run pre-commit run --all-files`. Within `make check`, mypy is
+**advisory (non-blocking)**, matching CI; use `make typecheck` to run it as a hard
+gate.
 
 > **Type-checking maturity:** mypy runs in lenient mode (no `disallow_untyped_defs`)
-> and currently reports a known baseline of pandas-stubs findings. New modules are
-> kept clean; the baseline is reduced incrementally. CI runs mypy as advisory
-> (non-blocking) until the baseline is clear, then it flips to blocking.
+> and currently reports **94 errors across 17 files** (as of 2026-06-13), mostly
+> pandas/numpy-stubs findings concentrated in the analytics modules
+> (`optimization/frontier.py`, `risk/stress.py`, `cli.py`, `features/returns.py`).
+> mypy is therefore run as **advisory (non-blocking) both in CI and in
+> `make check`**; the type gate is **not yet enforced**. The intent is to drive
+> this baseline down and then flip mypy to blocking — that work has not started.
 
 ## N. CI/CD
 
@@ -205,7 +210,7 @@ strongest area and predates these standards.
 | J | Resumability & idempotency | Met |
 | K | Testing strategy | Met |
 | L | Testing documentation | Met |
-| M | Code quality gates | Met (mypy lenient, baseline being reduced) |
+| M | Code quality gates | Partial — ruff/pytest/pip-audit enforced; mypy advisory (non-blocking) in CI **and** `make check`, with a 94-error baseline (17 files) not yet reduced |
 | N | CI/CD | Met (CD deferred; new gates advisory first) |
 | O | Documentation | Met |
 | P | Security & privacy | Met |

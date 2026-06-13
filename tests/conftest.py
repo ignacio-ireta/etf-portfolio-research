@@ -7,7 +7,6 @@ docs/testing.md for how the suite is organized.
 
 from __future__ import annotations
 
-import logging
 import subprocess
 from collections.abc import Iterator
 from pathlib import Path
@@ -18,24 +17,23 @@ import pytest
 
 from etf_portfolio.config import AppConfig, load_config
 from etf_portfolio.data.providers import PriceDataProvider
+from etf_portfolio.logging_config import reset_logging
 
 
 @pytest.fixture(autouse=True)
-def _cleanup_log_file_handlers() -> Iterator[None]:
-    """Detach any per-run file log handlers added during a test.
+def _reset_logging_handlers() -> Iterator[None]:
+    """Detach every handler ``configure_logging`` attached during a test.
 
-    ``configure_logging(log_file=...)`` attaches a FileHandler to the root
-    logger; without cleanup these accumulate across tests (and reference
-    deleted tmp paths). The shared stderr stream handler has no ``_etf_log_file``
-    attribute and is left intact.
+    ``configure_logging`` adds a shared stderr handler (and, with ``log_file=...``,
+    a FileHandler) to the root logger. Left attached across tests they accumulate,
+    reference deleted tmp paths, and — for the stderr handler — write to pytest's
+    closed per-test captured stream, flooding the suite with ``ValueError: I/O
+    operation on closed file``. Clearing them on teardown keeps each test isolated;
+    ``configure_logging`` re-adds them on demand in the next test.
     """
 
     yield
-    root_logger = logging.getLogger()
-    for handler in list(root_logger.handlers):
-        if getattr(handler, "_etf_log_file", None) is not None:
-            root_logger.removeHandler(handler)
-            handler.close()
+    reset_logging()
 
 
 # A small but realistic universe (3 assets + 1 benchmark) used across tests.

@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import numbers
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,21 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, sort_keys=True, allow_nan=False)
 
 
+class _LiveStderrHandler(logging.StreamHandler):
+    """A ``StreamHandler`` that always writes to the *current* ``sys.stderr``.
+
+    A plain ``StreamHandler`` binds ``sys.stderr`` at construction time and keeps
+    that reference forever. Under pytest, ``sys.stderr`` is swapped per test and
+    the captured stream is closed at teardown, so a long-lived handler later emits
+    ``ValueError: I/O operation on closed file``. Resolving the stream at emit time
+    avoids holding a stale reference.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.stream = sys.stderr
+        super().emit(record)
+
+
 def configure_logging(level: int = logging.INFO, *, log_file: Path | str | None = None) -> None:
     """Configure process-wide structured logging.
 
@@ -49,7 +65,7 @@ def configure_logging(level: int = logging.INFO, *, log_file: Path | str | None 
     if not any(
         getattr(handler, "_etf_structured_logging", False) for handler in root_logger.handlers
     ):
-        handler = logging.StreamHandler()
+        handler = _LiveStderrHandler()
         handler.setFormatter(JsonFormatter())
         handler._etf_structured_logging = True  # type: ignore[attr-defined]
         root_logger.addHandler(handler)
@@ -66,6 +82,23 @@ def configure_logging(level: int = logging.INFO, *, log_file: Path | str | None 
             file_handler.setFormatter(JsonFormatter())
             file_handler._etf_log_file = str(log_path)  # type: ignore[attr-defined]
             root_logger.addHandler(file_handler)
+
+
+def reset_logging() -> None:
+    """Remove and close every root-logger handler this module attached.
+
+    Covers both the shared stderr stream handler (tagged ``_etf_structured_logging``)
+    and any per-run file handlers (tagged ``_etf_log_file``). Tests call this on
+    teardown so handlers do not survive across pytest's per-test stderr capture.
+    """
+
+    root_logger = logging.getLogger()
+    for handler in list(root_logger.handlers):
+        if getattr(handler, "_etf_structured_logging", False) or (
+            getattr(handler, "_etf_log_file", None) is not None
+        ):
+            root_logger.removeHandler(handler)
+            handler.close()
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -107,4 +140,4 @@ def _normalize_log_value(value: Any) -> Any:
     return value
 
 
-__all__ = ["JsonFormatter", "configure_logging", "get_logger", "log_event"]
+__all__ = ["JsonFormatter", "configure_logging", "get_logger", "log_event", "reset_logging"]

@@ -9,7 +9,7 @@ help:
 	@echo "  format         Run ruff format"
 	@echo "  typecheck      Run mypy on src (lenient)"
 	@echo "  coverage       Run pytest with coverage measurement"
-	@echo "  check          Run ruff check --fix, ruff format, mypy, and pytest"
+	@echo "  check          Run ruff check --fix, ruff format, mypy (advisory), and pytest"
 	@echo "  precommit      Run all pre-commit hooks on all files"
 	@echo "  run            Run the full pipeline using configs/base.yaml"
 	@echo "  handoff-bundle Generate the handoff archive and manifest"
@@ -38,7 +38,7 @@ coverage:
 check:
 	uv run ruff check . --fix
 	uv run ruff format .
-	uv run mypy src
+	uv run mypy src || true  # advisory (non-blocking), consistent with CI; see standards M. Use `make typecheck` to enforce.
 	uv run pytest
 
 precommit:

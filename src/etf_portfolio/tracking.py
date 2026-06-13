@@ -142,6 +142,29 @@ def universe_id(tickers: list[str]) -> str:
 
 
 def current_git_commit_hash(project_root: Path) -> str | None:
+    """Return ``project_root``'s own HEAD commit, or ``None`` if it is not tracked.
+
+    Git walks upward to find a repository, so ``rev-parse HEAD`` on its own would
+    accept an unrelated *parent* repo when ``project_root`` is merely nested under
+    one (a research folder dropped inside another checkout). That would falsely
+    mark a run as tracked and cite the ancestor's commit. We therefore require the
+    repository's top level to be ``project_root`` itself; otherwise the directory
+    is not its own tracked repository and the run is treated as untracked.
+    """
+
+    toplevel = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if toplevel.returncode != 0:
+        return None
+    repo_root = toplevel.stdout.strip()
+    if not repo_root or Path(repo_root).resolve() != project_root.resolve():
+        return None
+
     completed = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=project_root,

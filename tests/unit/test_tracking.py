@@ -7,7 +7,12 @@ from pathlib import Path
 import pytest
 
 from etf_portfolio.config import load_config
-from etf_portfolio.tracking import build_run_record, relative_to_project_root, write_run_record
+from etf_portfolio.tracking import (
+    build_run_record,
+    current_git_commit_hash,
+    relative_to_project_root,
+    write_run_record,
+)
 
 
 def test_build_run_record_requires_git_commit(tmp_path: Path) -> None:
@@ -73,6 +78,35 @@ def test_build_run_record_uses_commit_hash_and_relative_artifact_paths(tmp_path:
     assert record["data_version"]["path"] == "data/processed/returns.parquet"
     assert record["output_artifacts"]["metrics"]["path"] == "reports/metrics.json"
     assert not Path(record["output_artifacts"]["metrics"]["path"]).is_absolute()
+
+
+def test_provenance_rejects_directory_nested_under_unrelated_repo(tmp_path: Path) -> None:
+    """A non-repo subdir inside a git repo must not inherit the parent's commit.
+
+    ``git rev-parse`` walks upward, so a research folder dropped inside another
+    checkout would otherwise be marked ``tracked`` and cite the ancestor's HEAD.
+    """
+
+    commit_hash = _initialize_git_repo(tmp_path)
+    # Sanity check: the repo root itself is correctly tracked.
+    assert current_git_commit_hash(tmp_path) == commit_hash
+
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    assert current_git_commit_hash(nested) is None
+
+    artifact_path = nested / "reports/metrics.json"
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_text("{}", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="real git commit"):
+        build_run_record(
+            stage="backtest",
+            run_id="backtest-nested",
+            config=load_config("configs/base.yaml"),
+            project_root=nested,
+            data_version_path=None,
+            output_artifacts={"metrics": artifact_path},
+        )
 
 
 def test_write_run_record_sanitizes_nonfinite_values_as_strict_json(tmp_path: Path) -> None:

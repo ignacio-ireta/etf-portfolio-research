@@ -13,6 +13,8 @@ from fnmatch import fnmatch
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from etf_portfolio.tracking import current_git_commit_hash
+
 INCLUDE_EXACT_FILES = (
     Path("pyproject.toml"),
     Path("uv.lock"),
@@ -136,18 +138,7 @@ def _mtime_utc(path: Path) -> str:
 
 
 def _git_commit(project_root: Path) -> str | None:
-    completed = subprocess.run(
-        ("git", "rev-parse", "HEAD"),
-        cwd=project_root,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-        check=False,
-    )
-    commit = completed.stdout.strip()
-    if completed.returncode != 0 or not commit:
-        return None
-    return commit
+    return current_git_commit_hash(project_root)
 
 
 def _is_excluded(path: Path) -> bool:

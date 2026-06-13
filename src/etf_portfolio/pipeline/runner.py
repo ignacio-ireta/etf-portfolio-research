@@ -119,6 +119,15 @@ def run_pipeline(
     state = PipelineState(run_id=run_id)
     errors: list[BaseException] = []
 
+    # Map each declared output file to its producing stage so a stage whose
+    # upstream producer failed (or was itself blocked) this run can be blocked
+    # rather than run. Without this, --continue (fail_fast=False) would run
+    # dependent stages against stale/missing artifacts and could emit a
+    # fresh-looking report from old prices/returns. Stages with no intra-pipeline
+    # producer are genuinely independent and still run.
+    produced_by = {str(path): stage.name for stage in stages for path in stage.outputs}
+    tainted: set[str] = set()
+
     with _InterruptGuard() as guard:
         for stage in stages:
             record = state.record(stage.name)
@@ -135,7 +144,10 @@ def run_pipeline(
                 prior_record = prior.stages.get(stage.name)
                 if (
                     prior_record is not None
-                    and prior_record.status == StageStatus.SUCCESS
+                    # A prior SKIPPED stage was itself an unchanged success carried
+                    # forward (with input_hash/outputs intact), so it must remain
+                    # skippable on the next resume — otherwise resume skips only once.
+                    and prior_record.status in (StageStatus.SUCCESS, StageStatus.SKIPPED)
                     and prior_record.input_hash == input_hash
                     and _outputs_intact(stage, prior_record.outputs)
                 ):
@@ -154,6 +166,24 @@ def run_pipeline(
                     save_state(state, state_path)
                     continue
 
+            blocked_by = {
+                produced_by[str(path)] for path in stage.inputs if str(path) in produced_by
+            } & tainted
+            if blocked_by:
+                record.status = StageStatus.BLOCKED
+                tainted.add(stage.name)
+                save_state(state, state_path)
+                log_event(
+                    LOGGER,
+                    logging.WARNING,
+                    "pipeline_stage_blocked",
+                    run_id=run_id,
+                    stage=stage.name,
+                    reason="upstream_failed",
+                    upstream=sorted(blocked_by),
+                )
+                continue
+
             record.status = StageStatus.RUNNING
             record.started_at = utc_now_iso()
             save_state(state, state_path)
@@ -165,6 +195,7 @@ def run_pipeline(
                 record.finished_at = utc_now_iso()
                 record.error_code = error_code_for(exc)
                 record.error = str(exc)
+                tainted.add(stage.name)
                 save_state(state, state_path)
                 log_event(
                     LOGGER,

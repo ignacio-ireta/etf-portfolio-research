@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 from plotly.io import write_html
 
+from etf_portfolio import __version__
 from etf_portfolio.backtesting.engine import run_walk_forward_backtest
 from etf_portfolio.backtesting.metrics import calculate_sharpe_ratio
 from etf_portfolio.config import AppConfig, OptimizationObjective, load_config
@@ -21,12 +22,23 @@ from etf_portfolio.data.providers import (
     YFinancePriceProvider,
 )
 from etf_portfolio.data.validate import validate_price_data
+from etf_portfolio.errors import (
+    EXIT_INTERRUPTED,
+    EXIT_OK,
+    ConfigError,
+    InsufficientHistoryError,
+    MLDisabledError,
+    PipelineInterrupted,
+    error_code_for,
+    exit_code_for,
+)
 from etf_portfolio.features.estimators import (
     calculate_covariance_matrix,
     estimate_expected_returns,
 )
 from etf_portfolio.features.returns import simple_returns
 from etf_portfolio.features.risk_free import get_risk_free_rate
+from etf_portfolio.io_utils import atomic_path, atomic_write_text
 from etf_portfolio.logging_config import configure_logging, get_logger, log_event
 from etf_portfolio.ml.dataset import build_ml_dataset
 from etf_portfolio.ml.evaluate import chronological_train_test_split, walk_forward_evaluate
@@ -42,10 +54,12 @@ from etf_portfolio.ml.train import (
     write_metrics_json,
 )
 from etf_portfolio.optimization.optimizer import OptimizationMethod, optimize_portfolio
+from etf_portfolio.pipeline.runner import Stage, run_pipeline
 from etf_portfolio.reporting.plots import build_efficient_frontier_figure
 from etf_portfolio.reporting.report import generate_report_bundle
 from etf_portfolio.reporting.tables import build_metrics_table
 from etf_portfolio.tracking import (
+    OUTPUT_SCHEMA_VERSION,
     build_run_record,
     generate_run_id,
     relative_to_project_root,
@@ -70,15 +84,19 @@ class BenchmarkSuiteArtifacts:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the configured research pipeline stage."""
+    """Run the configured research pipeline stage and return a process exit code."""
 
-    configure_logging()
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    level = logging.getLevelNamesMapping().get(args.log_level.upper(), logging.INFO)
     config_path = Path(args.config)
     project_root = Path.cwd()
     run_id = generate_run_id(args.command)
+    log_file = (
+        Path(args.log_file) if args.log_file else _default_log_file(args, project_root, run_id)
+    )
+    configure_logging(level=level, log_file=log_file)
 
     try:
         if args.command == "ingest":
@@ -102,6 +120,8 @@ def main(argv: list[str] | None = None) -> int:
                 project_root=project_root,
                 lookback_periods=args.lookback_periods,
                 run_id=run_id,
+                resume=args.resume,
+                fail_fast=args.fail_fast,
             )
         elif args.command == "ml":
             run_ml(config_path, project_root=project_root, run_id=run_id)
@@ -112,20 +132,36 @@ def main(argv: list[str] | None = None) -> int:
                 lookback_periods=args.lookback_periods,
                 run_id=run_id,
             )
-    except Exception as exc:
+    except (PipelineInterrupted, KeyboardInterrupt) as exc:
         log_event(
             LOGGER,
-            logging.ERROR,
-            "pipeline_stage_failed",
+            logging.WARNING,
+            "pipeline_interrupted",
             run_id=run_id,
             stage=args.command,
-            config_path=str(config_path),
-            error_type=type(exc).__name__,
             reason=str(exc),
         )
-        raise
+        return EXIT_INTERRUPTED
+    except Exception as exc:
+        # Tracebacks are surfaced only at debug level; otherwise emit a clean
+        # structured error and map to a meaningful exit code (see errors.py).
+        LOGGER.log(
+            logging.ERROR,
+            "pipeline_stage_failed",
+            extra={
+                "event": "pipeline_stage_failed",
+                "run_id": run_id,
+                "stage": args.command,
+                "config_path": str(config_path),
+                "error_type": type(exc).__name__,
+                "error_code": error_code_for(exc),
+                "reason": str(exc),
+            },
+            exc_info=level <= logging.DEBUG,
+        )
+        return exit_code_for(exc)
 
-    return 0
+    return EXIT_OK
 
 
 def run_ingest(
@@ -216,8 +252,8 @@ def run_validate(
     )
     validated_prices = raw_prices.sort_index()
     output_path = project_root / "data/processed/prices_validated.parquet"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    validated_prices.to_parquet(output_path)
+    with atomic_path(output_path) as temp_path:
+        validated_prices.to_parquet(temp_path)
     _write_validation_summary(
         validation_result,
         project_root / "reports/metrics/validation_summary.json",
@@ -230,7 +266,7 @@ def run_validate(
             run_id=stage_run_id,
             stage="validate",
             config_path=str(config_path),
-            suspicious_jump_count=int(len(validation_result.suspicious_jumps)),
+            suspicious_jump_count=len(validation_result.suspicious_jumps),
             missing_data_ratio=float(validation_result.missing_data_fraction.max()),
         )
     log_event(
@@ -273,8 +309,8 @@ def run_features(
     )
     returns = simple_returns(validated_prices)
     output_path = project_root / "data/processed/returns.parquet"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    returns.to_parquet(output_path)
+    with atomic_path(output_path) as temp_path:
+        returns.to_parquet(temp_path)
     log_event(
         LOGGER,
         logging.INFO,
@@ -340,8 +376,10 @@ def run_optimize(
     )
 
     workbook_path = project_root / "reports/excel/optimized_portfolios.xlsx"
-    workbook_path.parent.mkdir(parents=True, exist_ok=True)
-    with pd.ExcelWriter(workbook_path, engine="openpyxl") as writer:
+    with (
+        atomic_path(workbook_path) as workbook_temp,
+        pd.ExcelWriter(workbook_temp, engine="openpyxl") as writer,
+    ):
         weights.rename("weight").to_frame().to_excel(writer, sheet_name="weights")
         expected_returns.rename("expected_return").to_frame().to_excel(
             writer,
@@ -350,20 +388,20 @@ def run_optimize(
         covariance_matrix.to_excel(writer, sheet_name="covariance")
 
     frontier_path = project_root / "reports/html/frontier.html"
-    frontier_path.parent.mkdir(parents=True, exist_ok=True)
-    write_html(
-        build_efficient_frontier_figure(
-            expected_returns,
-            covariance_matrix,
-            portfolio_weights=weights,
-            max_weight=config.optimization.default_max_weight_per_etf,
-            risk_free_rate=get_risk_free_rate(config),
-            **optimization_constraints,
-        ),
-        file=str(frontier_path),
-        full_html=True,
-        include_plotlyjs="inline",
-    )
+    with atomic_path(frontier_path) as frontier_temp:
+        write_html(
+            build_efficient_frontier_figure(
+                expected_returns,
+                covariance_matrix,
+                portfolio_weights=weights,
+                max_weight=config.optimization.default_max_weight_per_etf,
+                risk_free_rate=get_risk_free_rate(config),
+                **optimization_constraints,
+            ),
+            file=str(frontier_temp),
+            full_html=True,
+            include_plotlyjs="inline",
+        )
     portfolio_return = float(weights.dot(expected_returns))
     portfolio_volatility = float((weights.T @ covariance_matrix @ weights) ** 0.5)
     portfolio_sharpe = calculate_sharpe_ratio(
@@ -427,7 +465,9 @@ def run_backtest(
     rebalance_dates = _rebalance_dates(asset_returns.index, config.rebalance.frequency)
     effective_lookback = min(lookback_periods, len(asset_returns.index) - 1)
     if effective_lookback <= 0:
-        raise ValueError("Not enough return history is available to run the backtest.")
+        raise InsufficientHistoryError(
+            "Not enough return history is available to run the backtest."
+        )
 
     method = _select_optimization_method(config)
     risk_free_rate = get_risk_free_rate(config)
@@ -562,9 +602,9 @@ def run_backtest(
         expense_ratios=expense_ratio_map,
     )
     legacy_report_path = project_root / "reports/html/backtest_report.html"
-    legacy_report_path.write_text(
+    atomic_write_text(
+        legacy_report_path,
         report_artifacts.html_path.read_text(encoding="utf-8"),
-        encoding="utf-8",
     )
 
     metrics_path = project_root / "reports/metrics/backtest_metrics.json"
@@ -584,6 +624,7 @@ def run_backtest(
     strategy_metrics_payload = metrics_by_strategy.pop("Optimized Strategy")
     strategy_metrics = pd.Series(strategy_metrics_payload, dtype=float)
     metrics_payload: dict[str, Any] = {
+        "schema_version": OUTPUT_SCHEMA_VERSION,
         "run_id": stage_run_id,
         "optimized_strategy": strategy_metrics_payload,
         "benchmarks": metrics_by_strategy,
@@ -613,6 +654,7 @@ def run_backtest(
             actual_end_date=aligned_portfolio.index.max().date().isoformat(),
             optimization_method=method,
             backtest_metrics=metrics_payload["optimized_strategy"],
+            pipeline_steps=["ingest", "validate", "features", "optimize", "backtest"],
         )
         written_run_record_path = write_run_record(
             run_record,
@@ -700,30 +742,115 @@ def run_all(
     project_root: Path = Path("."),
     lookback_periods: int = DEFAULT_LOOKBACK_PERIODS,
     run_id: str | None = None,
+    resume: bool = False,
+    fail_fast: bool = True,
 ) -> dict[str, Path]:
-    """Run the end-to-end research pipeline from ingestion through reporting."""
+    """Run the end-to-end research pipeline from ingestion through reporting.
 
+    Stages run through the resumable :func:`run_pipeline` orchestrator: with
+    ``resume=True`` unchanged stages are skipped by input hash, and SIGINT/SIGTERM
+    stop the run cleanly between stages (see docs/engineering_standards.md J/R).
+    """
+
+    config = _load_project_config(config_path, project_root)
     pipeline_run_id = run_id or generate_run_id("run-all")
-    return {
-        "raw_prices": run_ingest(config_path, project_root=project_root, run_id=pipeline_run_id),
-        "validated_prices": run_validate(
-            config_path,
-            project_root=project_root,
-            run_id=pipeline_run_id,
+
+    metadata_path = _metadata_path(project_root)
+    raw_prices = project_root / "data/raw/prices.parquet"
+    validated_prices = project_root / "data/processed/prices_validated.parquet"
+    returns = project_root / "data/processed/returns.parquet"
+    optimized_workbook = project_root / "reports/excel/optimized_portfolios.xlsx"
+    frontier = project_root / "reports/html/frontier.html"
+    report_html = project_root / "reports/html/latest_report.html"
+    metrics = project_root / "reports/metrics/backtest_metrics.json"
+
+    stages = [
+        Stage(
+            name="ingest",
+            run=lambda: run_ingest(config_path, project_root=project_root, run_id=pipeline_run_id),
+            config_sections=("data", "universe", "benchmark"),
+            inputs=(metadata_path,),
+            outputs=(raw_prices,),
         ),
-        "returns": run_features(config_path, project_root=project_root, run_id=pipeline_run_id),
-        "optimized_workbook": run_optimize(
-            config_path,
-            project_root=project_root,
-            run_id=pipeline_run_id,
-        )[0],
-        "report": run_backtest(
-            config_path,
-            project_root=project_root,
-            lookback_periods=lookback_periods,
-            run_id=pipeline_run_id,
-        )[0],
+        Stage(
+            name="validate",
+            run=lambda: run_validate(
+                config_path, project_root=project_root, run_id=pipeline_run_id
+            ),
+            config_sections=("data", "universe", "benchmark"),
+            inputs=(raw_prices, metadata_path),
+            outputs=(validated_prices,),
+        ),
+        Stage(
+            name="features",
+            run=lambda: run_features(
+                config_path, project_root=project_root, run_id=pipeline_run_id
+            ),
+            config_sections=("universe",),
+            inputs=(validated_prices,),
+            outputs=(returns,),
+        ),
+        Stage(
+            name="optimize",
+            run=lambda: run_optimize(
+                config_path, project_root=project_root, run_id=pipeline_run_id
+            ),
+            config_sections=("universe", "benchmark", "optimization", "constraints", "risk_free"),
+            inputs=(returns,),
+            outputs=(optimized_workbook, frontier),
+        ),
+        Stage(
+            name="backtest",
+            run=lambda: run_backtest(
+                config_path,
+                project_root=project_root,
+                lookback_periods=lookback_periods,
+                run_id=pipeline_run_id,
+            ),
+            config_sections=(
+                "universe",
+                "benchmark",
+                "optimization",
+                "constraints",
+                "risk_free",
+                "rebalance",
+                "backtest",
+                "costs",
+            ),
+            inputs=(returns,),
+            outputs=(report_html, metrics),
+            params={"lookback_periods": lookback_periods},
+        ),
+    ]
+
+    state_path = project_root / "reports/runs/pipeline_state.json"
+    config_arg = config_path if isinstance(config_path, str) else str(config_path)
+    run_pipeline(
+        stages,
+        config=config,
+        project_root=project_root,
+        run_id=pipeline_run_id,
+        state_path=state_path,
+        resume=resume,
+        fail_fast=fail_fast,
+        resume_hint=f"etf-portfolio run-all --config {config_arg} --resume",
+    )
+
+    return {
+        "raw_prices": raw_prices,
+        "validated_prices": validated_prices,
+        "returns": returns,
+        "optimized_workbook": optimized_workbook,
+        "report": report_html,
     }
+
+
+def _default_log_file(args: argparse.Namespace, project_root: Path, run_id: str) -> Path | None:
+    """Return the per-run log path for run-all (persistent traceability), else None."""
+
+    if args.command == "run-all":
+        return project_root / "reports/runs" / run_id / "run.log"
+    return None
 
 
 def run_ml(
@@ -736,7 +863,7 @@ def run_ml(
 
     config = _load_project_config(config_path, project_root)
     if not config.ml.enabled:
-        raise ValueError("ML is disabled in the current config.")
+        raise MLDisabledError("ML is disabled in the current config.")
 
     stage_run_id = run_id or generate_run_id("ml")
     tracking_provenance = resolve_run_provenance(config=config, project_root=project_root)
@@ -797,10 +924,14 @@ def run_ml(
     governance_path = artifact_dir / "governance.json"
     model_card_path = artifact_dir / "model_card.md"
 
-    dataset.frame.to_parquet(dataset_path)
-    evaluation.predictions.to_parquet(predictions_path)
-    evaluation.summary.to_csv(summary_path, index=False)
-    evaluation.fold_metrics.to_csv(fold_metrics_path, index=False)
+    with atomic_path(dataset_path) as dataset_temp:
+        dataset.frame.to_parquet(dataset_temp)
+    with atomic_path(predictions_path) as predictions_temp:
+        evaluation.predictions.to_parquet(predictions_temp)
+    with atomic_path(summary_path) as summary_temp:
+        evaluation.summary.to_csv(summary_temp, index=False)
+    with atomic_path(fold_metrics_path) as fold_metrics_temp:
+        evaluation.fold_metrics.to_csv(fold_metrics_temp, index=False)
     save_model_bundle(
         trained_model,
         output_path=model_path,
@@ -813,10 +944,10 @@ def run_ml(
             "target": config.ml.target,
             "training_scope": ML_MODEL_TRAINING_SCOPE,
             "training_scope_description": ML_MODEL_TRAINING_SCOPE_DESCRIPTION,
-            "training_observations": int(len(train_frame)),
+            "training_observations": len(train_frame),
             "training_start_date": _panel_date_min(train_frame),
             "training_end_date": _panel_date_max(train_frame),
-            "holdout_observations": int(len(test_frame)),
+            "holdout_observations": len(test_frame),
             "holdout_start_date": _panel_date_min(test_frame),
             "holdout_end_date": _panel_date_max(test_frame),
         },
@@ -835,8 +966,8 @@ def run_ml(
     governance["model_artifact"] = relative_to_project_root(project_root, model_path)
     governance["model_training_scope"] = ML_MODEL_TRAINING_SCOPE
     governance["model_training_scope_description"] = ML_MODEL_TRAINING_SCOPE_DESCRIPTION
-    governance["training_observations"] = int(len(train_frame))
-    governance["holdout_observations"] = int(len(test_frame))
+    governance["training_observations"] = len(train_frame)
+    governance["holdout_observations"] = len(test_frame)
     write_model_card(
         output_path=model_card_path,
         run_id=stage_run_id,
@@ -847,6 +978,7 @@ def run_ml(
     write_metrics_json(governance, governance_path)
 
     metrics_payload = {
+        "schema_version": OUTPUT_SCHEMA_VERSION,
         "run_id": stage_run_id,
         "best_model": best_model_name,
         "task": config.ml.task,
@@ -855,8 +987,8 @@ def run_ml(
         "model_artifact": relative_to_project_root(project_root, model_path),
         "model_training_scope": ML_MODEL_TRAINING_SCOPE,
         "model_training_scope_description": ML_MODEL_TRAINING_SCOPE_DESCRIPTION,
-        "training_observations": int(len(train_frame)),
-        "holdout_observations": int(len(test_frame)),
+        "training_observations": len(train_frame),
+        "holdout_observations": len(test_frame),
         "feature_columns": dataset.feature_columns,
         "summary": evaluation.summary.round(6).to_dict(orient="records"),
         "fold_count": int(evaluation.fold_metrics["fold"].nunique()),
@@ -905,6 +1037,7 @@ def run_ml(
         actual_start_date=asset_returns.index.min().date().isoformat(),
         actual_end_date=asset_returns.index.max().date().isoformat(),
         optimization_method=None,
+        pipeline_steps=["ingest", "validate", "features", "ml"],
         extra={
             "benchmark": config.benchmark.primary,
             "feature_set": dataset.feature_columns,
@@ -991,39 +1124,62 @@ def build_named_price_provider(name: str) -> PriceDataProvider:
     if provider_name == "tiingo":
         return TiingoPriceProvider()
 
-    raise ValueError(f"Unsupported data provider: {name}")
+    raise ConfigError(f"Unsupported data provider: {name}")
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="etf-portfolio")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"etf-portfolio {__version__}",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # Shared flags for every subcommand (config + logging ergonomics).
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--config", required=True)
+    common.add_argument(
+        "--log-level",
+        choices=["debug", "info", "warning", "error"],
+        default="info",
+        help="Logging verbosity (default: info). debug also prints tracebacks on failure.",
+    )
+    common.add_argument(
+        "--log-file",
+        default=None,
+        help="Write structured JSON logs to this file in addition to stderr.",
+    )
+
     for command_name in ("ingest", "validate", "features", "optimize", "ml"):
-        subparser = subparsers.add_parser(command_name)
-        subparser.add_argument("--config", required=True)
+        subparsers.add_parser(command_name, parents=[common])
 
-    backtest_parser = subparsers.add_parser("backtest")
-    backtest_parser.add_argument("--config", required=True)
-    backtest_parser.add_argument(
-        "--lookback-periods",
-        type=int,
-        default=DEFAULT_LOOKBACK_PERIODS,
-    )
+    backtest_parser = subparsers.add_parser("backtest", parents=[common])
+    backtest_parser.add_argument("--lookback-periods", type=int, default=DEFAULT_LOOKBACK_PERIODS)
 
-    report_parser = subparsers.add_parser("report")
-    report_parser.add_argument("--config", required=True)
-    report_parser.add_argument(
-        "--lookback-periods",
-        type=int,
-        default=DEFAULT_LOOKBACK_PERIODS,
-    )
+    report_parser = subparsers.add_parser("report", parents=[common])
+    report_parser.add_argument("--lookback-periods", type=int, default=DEFAULT_LOOKBACK_PERIODS)
 
-    run_all_parser = subparsers.add_parser("run-all")
-    run_all_parser.add_argument("--config", required=True)
+    run_all_parser = subparsers.add_parser("run-all", parents=[common])
+    run_all_parser.add_argument("--lookback-periods", type=int, default=DEFAULT_LOOKBACK_PERIODS)
     run_all_parser.add_argument(
-        "--lookback-periods",
-        type=int,
-        default=DEFAULT_LOOKBACK_PERIODS,
+        "--resume",
+        action="store_true",
+        help="Skip stages whose inputs are unchanged since the last successful run.",
+    )
+    fail_mode = run_all_parser.add_mutually_exclusive_group()
+    fail_mode.add_argument(
+        "--fail-fast",
+        dest="fail_fast",
+        action="store_true",
+        default=True,
+        help="Stop at the first failed stage (default).",
+    )
+    fail_mode.add_argument(
+        "--continue",
+        dest="fail_fast",
+        action="store_false",
+        help="Attempt remaining independent stages after a failure.",
     )
 
     return parser
@@ -1161,7 +1317,9 @@ def _apply_backtest_window(
     benchmark_window = benchmark_window.loc[common_dates]
 
     if asset_window.empty or benchmark_window.empty:
-        raise ValueError("No backtest return history remains after applying backtest date window.")
+        raise InsufficientHistoryError(
+            "No backtest return history remains after applying backtest date window."
+        )
 
     return asset_window, benchmark_window
 
@@ -1321,7 +1479,7 @@ def _asset_class_bounds(
     configured_classes = set(config.constraints.asset_class_bounds)
     unknown_classes = sorted(configured_classes - available_asset_classes)
     if unknown_classes:
-        raise ValueError(
+        raise ConfigError(
             "Configured constraints.asset_class_bounds contains unknown asset_class "
             f"values. unknown={unknown_classes}, available={sorted(available_asset_classes)}"
         )
@@ -1343,7 +1501,7 @@ def _ticker_bounds(
     }
     unknown_tickers = sorted(set(normalized_bounds) - available_tickers)
     if unknown_tickers:
-        raise ValueError(
+        raise ConfigError(
             "Configured constraints.ticker_bounds contains unknown tickers for the "
             f"available return columns. unknown={unknown_tickers}, "
             f"available={sorted(available_tickers)}"
@@ -1397,7 +1555,7 @@ def _select_optimization_method(config: AppConfig) -> OptimizationMethod:
     if mapped is not None:
         return mapped
 
-    raise ValueError(
+    raise ConfigError(
         "Unsupported optimization.active_objective is configured. "
         "Supported objectives are equal_weight, inverse_volatility, "
         "min_variance, max_sharpe, and risk_parity."
@@ -1420,11 +1578,11 @@ def _rebalance_dates(index: pd.DatetimeIndex, frequency: str) -> pd.DatetimeInde
 
 
 def _write_validation_summary(summary: Any, output_path: Path) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
+        "schema_version": OUTPUT_SCHEMA_VERSION,
         "missing_data_fraction": summary.missing_data_fraction.round(6).to_dict(),
         "history_coverage": summary.history_coverage.round(6).to_dict(),
-        "suspicious_jump_count": int(len(summary.suspicious_jumps)),
+        "suspicious_jump_count": len(summary.suspicious_jumps),
     }
     write_metrics_json(payload, output_path)
 

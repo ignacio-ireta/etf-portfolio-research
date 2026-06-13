@@ -35,19 +35,37 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, sort_keys=True, allow_nan=False)
 
 
-def configure_logging(level: int = logging.INFO) -> None:
-    """Configure process-wide structured logging once."""
+def configure_logging(level: int = logging.INFO, *, log_file: Path | str | None = None) -> None:
+    """Configure process-wide structured logging.
+
+    Idempotent for the stderr stream handler (added once) and for any given
+    ``log_file`` path (added once). Re-invoking updates the root level, so
+    ``--log-level`` takes effect even after an earlier call.
+    """
 
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
 
-    if any(getattr(handler, "_etf_structured_logging", False) for handler in root_logger.handlers):
-        return
+    if not any(
+        getattr(handler, "_etf_structured_logging", False) for handler in root_logger.handlers
+    ):
+        handler = logging.StreamHandler()
+        handler.setFormatter(JsonFormatter())
+        handler._etf_structured_logging = True  # type: ignore[attr-defined]
+        root_logger.addHandler(handler)
 
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
-    handler._etf_structured_logging = True  # type: ignore[attr-defined]
-    root_logger.addHandler(handler)
+    if log_file is not None:
+        log_path = Path(log_file)
+        already_attached = any(
+            getattr(handler, "_etf_log_file", None) == str(log_path)
+            for handler in root_logger.handlers
+        )
+        if not already_attached:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(log_path, encoding="utf-8")
+            file_handler.setFormatter(JsonFormatter())
+            file_handler._etf_log_file = str(log_path)  # type: ignore[attr-defined]
+            root_logger.addHandler(file_handler)
 
 
 def get_logger(name: str) -> logging.Logger:

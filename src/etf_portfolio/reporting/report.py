@@ -15,6 +15,7 @@ from plotly.io import to_html, write_image
 from plotly.offline import get_plotlyjs
 
 from etf_portfolio.backtesting.engine import WalkForwardBacktestResult
+from etf_portfolio.io_utils import atomic_path, atomic_write_bytes, atomic_write_text
 from etf_portfolio.logging_config import get_logger, log_event
 from etf_portfolio.metric_dictionary import metric_dictionary_table
 from etf_portfolio.reporting.plots import (
@@ -587,7 +588,7 @@ def generate_html_report(
 </html>
 """
 
-    output.write_text(report_html, encoding="utf-8")
+    atomic_write_text(output, report_html)
     return output
 
 
@@ -1249,7 +1250,10 @@ def _write_report_workbook(
     workbook_tables["trust_and_safety"] = common_false_conclusions_table()
     workbook_tables["metric_dictionary"] = metric_dictionary_table()
 
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    with (
+        atomic_path(output) as temp_path,
+        pd.ExcelWriter(temp_path, engine="openpyxl") as writer,
+    ):
         for sheet_name, table in workbook_tables.items():
             sanitized_name = sheet_name[:31]
             table.to_excel(writer, sheet_name=sanitized_name, index=False)
@@ -1269,9 +1273,10 @@ def _write_figure_exports(
     for name, figure in figures.items():
         path = output_root / f"{name}.png"
         try:
-            write_image(figure, str(path), format="png", width=1400, height=840, scale=2)
+            with atomic_path(path) as temp_path:
+                write_image(figure, str(temp_path), format="png", width=1400, height=840, scale=2)
         except Exception as exc:
-            path.write_bytes(PLACEHOLDER_PNG)
+            atomic_write_bytes(path, PLACEHOLDER_PNG)
             log_event(
                 LOGGER,
                 logging.WARNING,
@@ -1421,7 +1426,7 @@ def _build_assumptions_appendix(
         )
     blocks.append(_table_html(pd.DataFrame(config_rows)))
 
-    merged_assumptions: dict[str, str] = {key: value for key, value in _DEFAULT_ASSUMPTIONS}
+    merged_assumptions: dict[str, str] = dict(_DEFAULT_ASSUMPTIONS)
     for key, value in (assumptions or {}).items():
         merged_assumptions[str(key)] = str(value)
     assumption_table = pd.DataFrame(
@@ -1487,7 +1492,7 @@ def _assumptions_appendix_table(
                 },
             ]
         )
-    merged_assumptions: dict[str, str] = {key: value for key, value in _DEFAULT_ASSUMPTIONS}
+    merged_assumptions: dict[str, str] = dict(_DEFAULT_ASSUMPTIONS)
     for key, value in (assumptions or {}).items():
         merged_assumptions[str(key)] = str(value)
     rows.extend(

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from etf_portfolio.data.schemas import ETF_UNIVERSE_METADATA_SCHEMA, validate_etf_universe_metadata
+from etf_portfolio.errors import DataValidationError
 
 
 @dataclass(frozen=True)
@@ -62,7 +63,7 @@ def validate_price_data(
     missing_data_fraction = normalized.isna().mean()
     if (missing_data_fraction > max_missing_fraction).any():
         failing = missing_data_fraction[missing_data_fraction > max_missing_fraction]
-        raise ValueError(
+        raise DataValidationError(
             "Missing data exceeds the allowed threshold for tickers: "
             f"{', '.join(failing.index.tolist())}."
         )
@@ -70,7 +71,7 @@ def validate_price_data(
     history_coverage = normalized.notna().mean()
     if (history_coverage < min_history_ratio).any():
         failing = history_coverage[history_coverage < min_history_ratio]
-        raise ValueError(
+        raise DataValidationError(
             f"Insufficient price history for tickers: {', '.join(failing.index.tolist())}."
         )
 
@@ -128,7 +129,7 @@ def cross_check_price_data(
 
     common_tickers = primary_normalized.columns.intersection(reference_normalized.columns)
     if common_tickers.empty:
-        raise ValueError(
+        raise DataValidationError(
             "Cross-check failed: no overlapping tickers between "
             f"{primary_provider_name} and {reference_provider_name}."
         )
@@ -156,7 +157,7 @@ def cross_check_price_data(
         per_ticker_max_divergence[ticker] = float(relative.dropna().max() or 0.0)
 
     if insufficient_overlap:
-        raise ValueError(
+        raise DataValidationError(
             "Cross-check failed: insufficient overlapping observations "
             f"(< {min_overlap_observations}) for tickers: "
             f"{', '.join(sorted(insufficient_overlap))}."
@@ -171,7 +172,7 @@ def cross_check_price_data(
             f"{ticker}: {value:.4%}"
             for ticker, value in divergent.sort_values(ascending=False).items()
         )
-        raise ValueError(
+        raise DataValidationError(
             "Cross-check failed: relative divergence between "
             f"{primary_provider_name} and {reference_provider_name} exceeded "
             f"{max_relative_divergence:.4%} for tickers: {offenders}."
@@ -191,7 +192,7 @@ def _normalize_price_frame(prices: pd.DataFrame) -> pd.DataFrame:
     """Return a sorted, datetime-indexed price frame."""
 
     if prices.empty:
-        raise ValueError("Price data must not be empty.")
+        raise DataValidationError("Price data must not be empty.")
 
     normalized = prices.copy()
     normalized.index = pd.to_datetime(normalized.index)
@@ -203,11 +204,11 @@ def _validate_index_and_columns(prices: pd.DataFrame) -> None:
 
     if prices.index.duplicated().any():
         duplicated = prices.index[prices.index.duplicated()].unique()
-        raise ValueError(f"Duplicate dates found in price data: {duplicated.tolist()}.")
+        raise DataValidationError(f"Duplicate dates found in price data: {duplicated.tolist()}.")
 
     if prices.columns.duplicated().any():
         duplicated = prices.columns[prices.columns.duplicated()].unique()
-        raise ValueError(f"Duplicate tickers found in price data: {duplicated.tolist()}.")
+        raise DataValidationError(f"Duplicate tickers found in price data: {duplicated.tolist()}.")
 
 
 def _validate_non_empty_columns(prices: pd.DataFrame) -> None:
@@ -215,14 +216,14 @@ def _validate_non_empty_columns(prices: pd.DataFrame) -> None:
 
     empty_columns = prices.columns[prices.isna().all()].tolist()
     if empty_columns:
-        raise ValueError(f"Entirely null price columns found: {empty_columns}.")
+        raise DataValidationError(f"Entirely null price columns found: {empty_columns}.")
 
 
 def _validate_strictly_positive_observed_prices(prices: pd.DataFrame) -> None:
     """Reject non-positive observed prices while allowing configured missing data."""
 
     if (prices <= 0).fillna(False).any().any():
-        raise ValueError("Observed prices must be strictly positive.")
+        raise DataValidationError("Observed prices must be strictly positive.")
 
 
 def _normalize_metadata(metadata: pd.DataFrame) -> pd.DataFrame:
@@ -231,7 +232,7 @@ def _normalize_metadata(metadata: pd.DataFrame) -> pd.DataFrame:
     required_columns = list(ETF_UNIVERSE_METADATA_SCHEMA.columns.keys())
     missing_columns = [column for column in required_columns if column not in metadata.columns]
     if missing_columns:
-        raise ValueError(f"Metadata is missing required columns: {missing_columns}.")
+        raise DataValidationError(f"Metadata is missing required columns: {missing_columns}.")
     return validate_etf_universe_metadata(metadata.loc[:, required_columns])
 
 
@@ -243,7 +244,7 @@ def _validate_inception_dates(prices: pd.DataFrame, metadata: pd.DataFrame) -> N
         first_valid_date = prices[ticker].dropna().index.min()
         inception_date = inception_dates.loc[ticker]
         if pd.notna(first_valid_date) and first_valid_date < inception_date:
-            raise ValueError(
+            raise DataValidationError(
                 f"Ticker {ticker} has price history before its inception date "
                 f"{inception_date.date()}."
             )
@@ -253,7 +254,9 @@ def _validate_benchmark_overlap(prices: pd.DataFrame, benchmark_ticker: str) -> 
     """Ensure benchmark and asset series have overlapping observed dates."""
 
     if benchmark_ticker not in prices.columns:
-        raise ValueError(f"Benchmark ticker {benchmark_ticker} was not found in the price data.")
+        raise DataValidationError(
+            f"Benchmark ticker {benchmark_ticker} was not found in the price data."
+        )
 
     benchmark_dates = set(prices[benchmark_ticker].dropna().index)
     asset_frame = prices.drop(columns=[benchmark_ticker], errors="ignore")
@@ -262,7 +265,7 @@ def _validate_benchmark_overlap(prices: pd.DataFrame, benchmark_ticker: str) -> 
 
     asset_dates = set(asset_frame.dropna(how="all").index)
     if not benchmark_dates.intersection(asset_dates):
-        raise ValueError(
+        raise DataValidationError(
             f"Benchmark ticker {benchmark_ticker} does not overlap the asset date range."
         )
 

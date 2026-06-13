@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 
 from etf_portfolio.config import AppConfig
+from etf_portfolio.io_utils import atomic_write_text
 from etf_portfolio.ml.dataset import MLDataset
 from etf_portfolio.ml.train import sanitize_json_payload
 from etf_portfolio.tracking import file_sha256
@@ -202,7 +203,7 @@ def write_model_card(
             "- Revert to the historical_mean baseline and the prior approved model artifact.",
         ]
     )
-    output_path.write_text("\n".join(lines), encoding="utf-8")
+    atomic_write_text(output_path, "\n".join(lines))
     return output_path
 
 

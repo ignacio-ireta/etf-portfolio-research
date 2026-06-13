@@ -11,6 +11,7 @@ import pandas as pd
 from etf_portfolio.data.providers import PriceDataProvider
 from etf_portfolio.data.schemas import ETF_UNIVERSE_METADATA_SCHEMA, validate_etf_universe_metadata
 from etf_portfolio.data.validate import PriceValidationResult, validate_price_data
+from etf_portfolio.io_utils import atomic_path
 
 DEFAULT_METADATA_PATH = Path("data/metadata/etf_universe.csv")
 CANONICAL_RAW_PRICES_FILENAME = "prices.parquet"
@@ -141,7 +142,8 @@ def _write_parquet(frame: pd.DataFrame, path: Path) -> None:
     """Write a dataframe to parquet with a clear dependency error if the engine is missing."""
 
     try:
-        frame.to_parquet(path)
+        with atomic_path(path) as temp_path:
+            frame.to_parquet(temp_path)
     except ImportError as exc:
         raise ImportError(
             "Writing parquet files requires an engine such as `pyarrow`. "

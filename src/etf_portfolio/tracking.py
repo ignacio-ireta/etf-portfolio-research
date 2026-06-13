@@ -11,9 +11,16 @@ from typing import Any
 from uuid import uuid4
 
 from etf_portfolio.config import AppConfig
+from etf_portfolio.errors import ProvenanceError
+from etf_portfolio.io_utils import atomic_write_text
 
 TRACKED_PROVENANCE_STATUS = "tracked"
 UNTRACKED_PREVIEW_PROVENANCE_STATUS = "untracked_preview"
+
+# Version of the on-disk output contract (run records and metrics JSON). Bump on
+# any breaking change to the JSON/Excel/HTML output schema (see
+# docs/output_contract.md).
+OUTPUT_SCHEMA_VERSION = "1.0"
 
 
 def generate_run_id(stage: str) -> str:
@@ -35,6 +42,7 @@ def build_run_record(
     actual_end_date: str | None = None,
     optimization_method: str | None = None,
     backtest_metrics: dict[str, Any] | None = None,
+    pipeline_steps: list[str] | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a normalized run record for any research stage."""
@@ -46,6 +54,8 @@ def build_run_record(
         name: _artifact_record(project_root, Path(path)) for name, path in output_artifacts.items()
     }
     record = {
+        "schema_version": OUTPUT_SCHEMA_VERSION,
+        "pipeline_steps": pipeline_steps,
         "run_id": run_id,
         "stage": stage,
         "timestamp_utc": datetime.now(UTC).isoformat(),
@@ -81,7 +91,7 @@ def resolve_run_provenance(*, config: AppConfig, project_root: Path) -> dict[str
     git_commit_hash = current_git_commit_hash(project_root)
     if config.tracking.require_git_commit:
         if git_commit_hash is None:
-            raise RuntimeError(
+            raise ProvenanceError(
                 "Run tracking requires a real git commit. Run from a git repository with at "
                 "least one commit, or set tracking.require_git_commit=false for an explicitly "
                 "untracked preview run."
@@ -104,14 +114,14 @@ def write_run_record(record: dict[str, Any], *, artifact_dir: Path) -> Path:
 
     artifact_dir.mkdir(parents=True, exist_ok=True)
     output_path = artifact_dir / f"{record['stage']}_{record['run_id']}.json"
-    output_path.write_text(
+    atomic_write_text(
+        output_path,
         json.dumps(
             sanitize_json_payload(record, allow_nan=False),
             indent=2,
             sort_keys=True,
             allow_nan=False,
         ),
-        encoding="utf-8",
     )
     return output_path
 

@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from etf_portfolio.config import AppConfig, MLTask
+from etf_portfolio.io_utils import atomic_path, atomic_write_text
 from etf_portfolio.ml.registry import build_model
 
 
@@ -42,14 +43,13 @@ def save_model_bundle(
 ) -> Path:
     """Persist a trained model and its metadata to disk."""
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "model": model,
         "feature_columns": feature_columns,
         "target_column": target_column,
         "metadata": metadata,
     }
-    with output_path.open("wb") as file_handle:
+    with atomic_path(output_path) as temp_path, temp_path.open("wb") as file_handle:
         pickle.dump(payload, file_handle)
     return output_path
 
@@ -97,15 +97,14 @@ def log_mlflow_run(
 
 
 def write_metrics_json(metrics: dict[str, Any], output_path: Path) -> Path:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(
+    atomic_write_text(
+        output_path,
         json.dumps(
             sanitize_json_payload(metrics, allow_nan=False),
             indent=2,
             sort_keys=True,
             allow_nan=False,
         ),
-        encoding="utf-8",
     )
     return output_path
 

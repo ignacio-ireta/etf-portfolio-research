@@ -284,15 +284,14 @@ def test_frontier_returns_feasible_points() -> None:
 
 
 def test_optimizer_logs_failed_optimization(caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level(logging.ERROR):
-        with pytest.raises(ValueError, match="Optimization failed"):
-            optimize_portfolio(
-                make_expected_returns(),
-                make_covariance_matrix(),
-                method="target_return",
-                max_weight=0.30,
-                target_return=0.50,
-            )
+    with caplog.at_level(logging.ERROR), pytest.raises(ValueError, match="Optimization failed"):
+        optimize_portfolio(
+            make_expected_returns(),
+            make_covariance_matrix(),
+            method="target_return",
+            max_weight=0.30,
+            target_return=0.50,
+        )
 
     failure_records = [
         record for record in caplog.records if getattr(record, "event", "") == "optimizer_failed"

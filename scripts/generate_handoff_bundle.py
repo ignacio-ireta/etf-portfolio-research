@@ -173,10 +173,7 @@ def _is_excluded(path: Path) -> bool:
     ):
         return path.stat().st_size > MAX_HTML_BYTES
 
-    if file_name in {"secrets", "secrets.txt", "secrets.json"}:
-        return True
-
-    return False
+    return file_name in {"secrets", "secrets.txt", "secrets.json"}
 
 
 def _file_sha256(path: Path) -> str:

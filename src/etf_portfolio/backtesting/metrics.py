@@ -553,8 +553,8 @@ def _placeholder_benchmark_weights(
 __all__ = [
     "alpha",
     "average_number_of_holdings",
-    "beta",
     "best_month",
+    "beta",
     "cagr",
     "calculate_beta",
     "calculate_portfolio_return",

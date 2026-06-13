@@ -4,14 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "etf-portfolio-research"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Reproducible ETF portfolio research project scaffold."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
+license = { text = "MIT" }
+authors = [{ name = "Astrid Lysheim" }]
 dependencies = [
   "kaleido",
   "numpy",
-  "mlflow",
   "openpyxl",
   "pandas",
   "pandera",
@@ -25,14 +26,32 @@ dependencies = [
   "yfinance",
 ]
 
+# Optional, off-by-default capabilities. ML experiment tracking sends runs to an
+# MLflow backend, so it is opt-in (install with `uv sync --extra ml`). The core
+# pipeline runs without it; `log_mlflow_run` degrades gracefully if it is absent.
+[project.optional-dependencies]
+ml = ["mlflow"]
+
 [project.scripts]
 etf-portfolio = "etf_portfolio.cli:main"
 
+# Development dependency groups (PEP 735), separated by purpose. `dev` is an
+# aggregate that installs all of them; CI and the Makefile use `--group dev`.
 [dependency-groups]
+test = ["pytest", "pytest-cov", "hypothesis"]
+lint = ["ruff", "pre-commit"]
+typecheck = ["mypy", "pandas-stubs", "types-PyYAML"]
+security = ["pip-audit"]
+docs = []
 dev = [
-  "pytest",
-  "ruff",
+  { include-group = "test" },
+  { include-group = "lint" },
+  { include-group = "typecheck" },
+  { include-group = "security" },
 ]
+
+[tool.hatch.version]
+path = "src/etf_portfolio/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/etf_portfolio"]
@@ -40,6 +59,13 @@ packages = ["src/etf_portfolio"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+  "slow: long-running tests (deselect with -m 'not slow')",
+  "integration: multi-component integration tests",
+  "e2e: end-to-end CLI tests that drive the command-line entrypoint",
+  "golden: golden-file snapshot tests (regenerate with UPDATE_GOLDEN=1)",
+  "property: property-based / fuzz tests",
+]
 
 [tool.ruff]
 line-length = 100
@@ -53,6 +79,15 @@ select = [
   "F",
   "I",
   "UP",
+  "B",
+  "C4",
+  "SIM",
+  "RUF",
+]
+ignore = [
+  # Raw-string intent in pytest `match=` patterns; our assertions use plain
+  # substrings where regex metacharacters are harmless. Low value, high noise.
+  "RUF043",
 ]
 
 [tool.ruff.format]
@@ -60,3 +95,22 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "lf"
+
+# Lenient/gradual static typing: type-check the package without forcing every
+# function to be annotated yet. Tighten over time (see docs/engineering_standards.md).
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[tool.coverage.run]
+source = ["etf_portfolio"]
+branch = true
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

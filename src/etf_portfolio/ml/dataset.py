@@ -173,7 +173,7 @@ def _build_metadata_frame(
     horizon_periods: int,
 ) -> pd.DataFrame:
     feature_end_dates = pd.Series(index, index=index, name="feature_end_date")
-    shifted_start = pd.DatetimeIndex(list(index[1:]) + [pd.NaT])
+    shifted_start = pd.DatetimeIndex([*list(index[1:]), pd.NaT])
     shifted_end = pd.DatetimeIndex(list(index[horizon_periods:]) + [pd.NaT] * horizon_periods)
     target_start_dates = pd.Series(shifted_start, index=index, name="target_start_date")
     target_end_dates = pd.Series(shifted_end, index=index, name="target_end_date")

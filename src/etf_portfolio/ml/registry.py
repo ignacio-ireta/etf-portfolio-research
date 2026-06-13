@@ -16,11 +16,11 @@ from etf_portfolio.config import MLTask
 class HistoricalMeanRegressor(BaseEstimator):
     mean_: float = 0.0
 
-    def fit(self, X, y):  # noqa: N803
+    def fit(self, X, y):
         self.mean_ = float(np.asarray(y, dtype=float).mean())
         return self
 
-    def predict(self, X):  # noqa: N803
+    def predict(self, X):
         return np.full(len(X), self.mean_, dtype=float)
 
 
@@ -28,15 +28,15 @@ class HistoricalMeanRegressor(BaseEstimator):
 class HistoricalMeanClassifier(BaseEstimator):
     positive_rate_: float = 0.5
 
-    def fit(self, X, y):  # noqa: N803
+    def fit(self, X, y):
         self.positive_rate_ = float(np.asarray(y, dtype=float).mean())
         return self
 
-    def predict(self, X):  # noqa: N803
+    def predict(self, X):
         label = 1 if self.positive_rate_ >= 0.5 else 0
         return np.full(len(X), label, dtype=int)
 
-    def predict_proba(self, X):  # noqa: N803
+    def predict_proba(self, X):
         negative = 1.0 - self.positive_rate_
         return np.column_stack(
             [

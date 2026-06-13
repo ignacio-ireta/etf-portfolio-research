@@ -353,10 +353,7 @@ def _apply_contribution_only(
 
     previous_holdings = previous * portfolio_value
     new_holdings = previous_holdings + trades
-    if new_total > 0.0:
-        applied_weights = new_holdings / new_total
-    else:
-        applied_weights = target.copy()
+    applied_weights = new_holdings / new_total if new_total > 0.0 else target.copy()
 
     cash_drift = float(trades.sum() - contribution_amount)
     if abs(cash_drift) > CASH_CONSERVATION_TOLERANCE * 100:

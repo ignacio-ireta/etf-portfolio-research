@@ -128,6 +128,7 @@ def _validate_strictly_positive_observed_prices(prices: pd.Series | pd.DataFrame
 
 
 __all__ = [
+    "MissingPricePolicy",
     "annualize_return",
     "annualize_volatility",
     "annualized_return",
@@ -138,6 +139,5 @@ __all__ = [
     "drawdown_series",
     "log_returns",
     "max_drawdown",
-    "MissingPricePolicy",
     "simple_returns",
 ]

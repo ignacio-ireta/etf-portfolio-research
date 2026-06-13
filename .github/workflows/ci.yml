@@ -36,5 +36,24 @@ jobs:
       - name: Ruff format check
         run: uv run ruff format --check .
 
-      - name: Pytest
-        run: uv run pytest -q
+      # Quality gates added under the engineering standards (M/N/P). These are
+      # advisory (continue-on-error) for now; flip to blocking once baselines
+      # are clean. See docs/engineering_standards.md sections M and N.
+      - name: Type check (advisory)
+        continue-on-error: true
+        run: uv run mypy src
+
+      - name: Pytest with coverage
+        run: uv run pytest -q --cov=etf_portfolio --cov-report=xml --cov-report=term
+
+      - name: Dependency vulnerability audit (advisory)
+        continue-on-error: true
+        run: uv run pip-audit
+
+      - name: Upload coverage report
+        if: ${{ matrix.python-version == '3.12' }}
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore

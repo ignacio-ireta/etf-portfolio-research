@@ -271,7 +271,7 @@ def run_walk_forward_backtest(
     trades_frame.index.name = "rebalance_date"
     rebalance_summary = pd.DataFrame(rebalance_records).set_index("rebalance_date")
     portfolio_value_series = pd.Series(
-        {date: value for date, value in portfolio_value_records},
+        dict(portfolio_value_records),
         name="portfolio_value",
         dtype=float,
     )

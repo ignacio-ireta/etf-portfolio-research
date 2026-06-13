@@ -1,0 +1,41 @@
+# Pre-commit hooks for the etf-portfolio-research project.
+# Install once with:  uv run pre-commit install
+# Run on demand with: uv run pre-commit run --all-files
+#
+# ruff and mypy run as local hooks via `uv run` so they use the exact,
+# uv-locked tool versions that CI uses (no separate rev to keep in sync).
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+        # data/ and reports/ artifacts are intentionally versioned for the
+        # offline handoff bundle; legacy/ holds large reference notebooks.
+        exclude: ^(data/|reports/|legacy/)
+
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: mypy
+        name: mypy (src)
+        entry: uv run mypy src
+        language: system
+        pass_filenames: false
+        types: [python]

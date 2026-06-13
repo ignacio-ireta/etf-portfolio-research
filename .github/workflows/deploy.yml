@@ -1,0 +1,75 @@
+name: Sync Reports to Showcase Website
+
+on:
+  push:
+    branches: [main]
+    # Only fire when the committed report artifacts actually change. Code-only,
+    # docs-only, or test-only commits to main do NOT trigger a website sync.
+    paths:
+      - "reports/**"
+  workflow_dispatch:
+
+# Read-only against THIS repo. We do not publish ETF's own Pages site; all writes
+# go to the external showcase repo and are authorized by an SSH deploy key, not by
+# GITHUB_TOKEN. So no pages/id-token permissions are needed here.
+permissions:
+  contents: read
+
+# Serialize syncs so two quick pushes can't race on the showcase repo's git
+# history (the second push would otherwise fail on a non-fast-forward).
+concurrency:
+  group: etf-website-sync
+  cancel-in-progress: false
+
+env:
+  WEBSITE_REPO: ignacio-ireta/ignacio-ireta.github.io
+  WEBSITE_BRANCH: master
+  WEBSITE_PATH: projects/etf-portfolio-research
+  WEBSITE_REPO_DEPLOY_KEY: ${{ secrets.WEBSITE_REPO_DEPLOY_KEY }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      # Source of the committed reports/ artifacts. We do NOT run the Python
+      # pipeline here — reports/ is tracked, so the deploy only copies.
+      - name: Checkout ETF source repo
+        uses: actions/checkout@v4
+
+      - name: Checkout showcase website repo
+        if: env.WEBSITE_REPO_DEPLOY_KEY != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.WEBSITE_REPO }}
+          ref: ${{ env.WEBSITE_BRANCH }}
+          path: website
+          # The deploy key's matching public key is registered as a write-enabled
+          # deploy key on the showcase repo, which authorizes the later push.
+          ssh-key: ${{ env.WEBSITE_REPO_DEPLOY_KEY }}
+
+      - name: Sync curated report artifacts into website repo
+        if: env.WEBSITE_REPO_DEPLOY_KEY != ''
+        run: scripts/sync_website_embed.sh "website/${WEBSITE_PATH}"
+
+      - name: Commit and push report update
+        if: env.WEBSITE_REPO_DEPLOY_KEY != ''
+        run: |
+          cd website
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Stage ONLY the embed path. The sync never touches index.html/embed.js,
+          # and scoping git add to WEBSITE_PATH keeps the commit tightly bounded.
+          git add -A "${WEBSITE_PATH}"
+          if git diff --cached --quiet; then
+            echo "No report changes to sync; showcase already up to date."
+          else
+            short_sha="${GITHUB_SHA::7}"
+            git commit -m "Update ETF report artifacts from etf-portfolio-research@${short_sha}"
+            git push origin "HEAD:${WEBSITE_BRANCH}"
+          fi
+
+      - name: Website sync not configured
+        if: env.WEBSITE_REPO_DEPLOY_KEY == ''
+        run: |
+          echo "Skipping showcase sync because WEBSITE_REPO_DEPLOY_KEY is not configured."
+          echo "Add it in this repo's Settings > Secrets and variables > Actions to enable it."

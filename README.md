@@ -44,10 +44,20 @@ support below 3.14, and CI tests the supported versions.
 uv sync --group dev
 ```
 
+Dev dependencies are split into purpose-specific groups (`test`, `lint`,
+`typecheck`, `security`, `docs`) aggregated by `dev`. Optional ML experiment
+tracking is an extra: `uv sync --extra ml`.
+
 Run the full pipeline:
 
 ```bash
 uv run etf-portfolio run-all --config configs/base.yaml
+```
+
+Interrupt with Ctrl-C and resume where it left off (unchanged stages are skipped):
+
+```bash
+uv run etf-portfolio run-all --config configs/base.yaml --resume
 ```
 
 The repository does not currently define a DVC workflow. Use the CLI commands
@@ -67,13 +77,24 @@ uv run etf-portfolio report --config configs/base.yaml
 uv run etf-portfolio run-all --config configs/base.yaml
 ```
 
+Global flags (available on every subcommand): `--config`, `--log-level
+{debug,info,warning,error}`, `--log-file PATH`, and `etf-portfolio --version`.
+`run-all` additionally accepts `--resume` and `--fail-fast`/`--continue`. The CLI
+returns meaningful exit codes (see [docs/troubleshooting.md](docs/troubleshooting.md)).
+
 Make targets:
 
 ```bash
-make sync
-make lint
-make test
-make run
+make sync          # install dev dependencies
+make lint          # ruff check
+make format        # ruff format
+make typecheck     # mypy (lenient)
+make test          # full test suite
+make test-fast     # skip slow tests (-m "not slow")
+make coverage      # pytest with coverage
+make check         # ruff --fix + format + mypy + pytest
+make precommit     # run all pre-commit hooks
+make run           # run-all on configs/base.yaml
 make handoff-bundle
 ```
 
@@ -89,7 +110,9 @@ Core outputs produced by the code-driven pipeline:
 - `reports/excel/portfolio_results.xlsx`
 - `reports/figures/*.png`
 - `reports/metrics/backtest_metrics.json`
-- `reports/runs/*.json`
+- `reports/runs/*.json` (run records)
+- `reports/runs/pipeline_state.json` (resumable run-all state)
+- `reports/runs/<run_id>/run.log` and `errors.json` (per-run log; errors on failure)
 
 The handoff bundle intentionally includes `data/processed/*.parquet` so a
 recipient can inspect or rerun report/backtest stages without depending on an
@@ -168,6 +191,11 @@ The HTML report is generated from pipeline outputs, not notebook state.
 - [Architecture](docs/architecture.md)
 - [Methodology](docs/methodology.md)
 - [Data Dictionary](docs/data_dictionary.md)
+- [Output Contract](docs/output_contract.md)
+- [Engineering Standards](docs/engineering_standards.md)
+- [Testing](docs/testing.md)
+- [Troubleshooting](docs/troubleshooting.md)
 - [Runbook](docs/runbook.md)
 - [Model Card](docs/model_card.md)
 - [Research Log](docs/research_log.md)
+- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)

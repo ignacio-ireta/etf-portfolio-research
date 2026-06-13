@@ -1,5 +1,12 @@
 12. Add testing from the beginning
 
+> The canonical, up-to-date testing guide now lives at
+> [`docs/testing.md`](../docs/testing.md) (how to run the suite, markers,
+> fixtures, golden files, CI). This file records the original strategy notes.
+> The planned categories below — unit, integration, regression, bias/leakage,
+> golden-file — are now implemented under `tests/` (`unit/`, `integration/`,
+> `e2e/`, `golden/`, `regression/`).
+
 Testing strategy:
 
 Unit tests:

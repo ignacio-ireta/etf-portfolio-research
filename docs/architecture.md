@@ -29,8 +29,12 @@ orchestration live in `src/etf_portfolio/cli.py`.
    assumptions, metrics, reports, figures, workbooks, and run record.
 6. `report` can regenerate reporting artifacts from existing pipeline outputs.
 
-`run-all` executes these stages in order using one run id so logs, artifacts,
-metrics, and run records can be tied back to the same execution.
+`run-all` executes these stages in order through the resumable runner in
+`src/etf_portfolio/pipeline/`, using one run id so logs, artifacts, metrics, and
+run records can be tied back to the same execution. The runner persists a state
+manifest (`reports/runs/pipeline_state.json`), supports `--resume`
+(skip-unchanged-by-input-hash), and stops cleanly between stages on Ctrl-C. See
+[engineering_standards.md](engineering_standards.md) sections F, J, and R.
 
 ## Configuration
 
@@ -58,7 +62,11 @@ The active optimizer objective is `optimization.active_objective`; it is used by
 - `src/etf_portfolio/risk/`: exposure analysis, drawdown, stress testing, and risk attribution.
 - `src/etf_portfolio/reporting/`: Plotly figures, Excel tables, HTML report generation, and the report-bundle utility.
 - `src/etf_portfolio/ml/`: experimental ML dataset creation, training, evaluation, registry, and governance gates.
+- `src/etf_portfolio/pipeline/`: the resumable stage runner, pipeline state manifest, and console progress/summary.
 - `src/etf_portfolio/tracking.py`: utility for run-record persistence and artifact hashing.
+- `src/etf_portfolio/errors.py`: domain exception taxonomy and CLI exit codes.
+- `src/etf_portfolio/io_utils.py`: atomic output writes (temp file + `os.replace`).
+- `src/etf_portfolio/logging_config.py`: structured JSON logging configuration.
 
 ## Data and Artifacts
 
@@ -68,7 +76,8 @@ The active optimizer objective is `optimization.active_objective`; it is used by
 - `reports/excel/`: structured workbooks for weights and backtest results.
 - `reports/figures/`: static PNG plots for the reports.
 - `reports/metrics/`: aggregated summary metrics in JSON format.
-- `reports/runs/`: detailed records of every pipeline execution.
+- `reports/runs/`: detailed records of every pipeline execution, the resumable
+  `pipeline_state.json`, and per-run `<run_id>/run.log` (plus `errors.json` on failure).
 
 ## Handoff Bundle Policy
 

@@ -34,11 +34,11 @@ jobs:
       # Source of the committed reports/ artifacts. We do NOT run the Python
       # pipeline here — reports/ is tracked, so the deploy only copies.
       - name: Checkout ETF source repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Checkout showcase website repo
         if: env.WEBSITE_REPO_DEPLOY_KEY != ''
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ env.WEBSITE_REPO }}
           ref: ${{ env.WEBSITE_BRANCH }}

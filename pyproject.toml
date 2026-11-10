@@ -9,7 +9,7 @@ description = "Reproducible ETF portfolio research project scaffold."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = { text = "MIT" }
-authors = [{ name = "Astrid Lysheim" }]
+authors = [{ name = "José Ignacio Esparza Ireta" }]
 dependencies = [
   "kaleido",
   "numpy",

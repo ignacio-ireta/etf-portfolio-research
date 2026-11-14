@@ -16,7 +16,7 @@ def test_guided_examples_cover_required_walkthroughs() -> None:
 
 def test_guided_examples_reference_existing_report_artifacts() -> None:
     artifact_paths = [
-        "reports/runs/backtest_run-all-20260424T175044Z-3777911e.json",
+        "reports/runs/backtest_backtest-20261114T031301Z-ee163e1c.json",
         "reports/html/latest_report.html",
         "reports/excel/portfolio_results.xlsx",
         "reports/metrics/backtest_metrics.json",

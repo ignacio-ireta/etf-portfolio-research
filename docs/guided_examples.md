@@ -4,7 +4,7 @@ These walkthroughs show how to reproduce, modify, and interpret the project usin
 
 The examples use this artifact snapshot as the baseline:
 
-- run record: `reports/runs/backtest_run-all-20260424T175044Z-3777911e.json`
+- run record: `reports/runs/backtest_backtest-20261114T031301Z-ee163e1c.json`
 - HTML report: `reports/html/latest_report.html`
 - Excel workbook: `reports/excel/portfolio_results.xlsx`
 - metrics JSON: `reports/metrics/backtest_metrics.json`
@@ -60,38 +60,38 @@ Then inspect the machine-readable files:
 
 ```text
 reports/metrics/backtest_metrics.json
-reports/runs/backtest_run-all-20260424T175044Z-3777911e.json
+reports/runs/backtest_backtest-20261114T031301Z-ee163e1c.json
 reports/excel/portfolio_results.xlsx
 ```
 
 Use the run record to confirm what produced the report:
 
-- `run_id`: `run-all-20260424T141121Z-1a1090c0`
+- `run_id`: `backtest-20261114T031301Z-ee163e1c`
 - `optimization_method`: `max_sharpe`
 - `risk_model`: `ledoit_wolf`
 - `benchmark`: `VT`
-- `start_date`: `2015-01-30`
+- `start_date`: `2014-02-03`
 - `end_date`: `2026-04-24`
 
 ### Read The Result
 
 The current metrics JSON reports these optimized-strategy values:
 
-- `CAGR`: `0.102113`, meaning about `10.21%` annualized historical growth.
-- `Annualized Volatility`: `0.121614`, meaning about `12.16%` annualized fluctuation.
-- `Max Drawdown`: `-0.250168`, meaning the worst peak-to-trough decline was about `-25.02%`.
-- `Sharpe Ratio`: `0.613851`, a risk-adjusted return estimate after the configured risk-free rate.
-- `Beta`: `0.669599`, lower than the selected benchmark ETF in this run.
-- `Turnover`: `0.022086`, meaning average rebalance turnover was about `2.21%`.
+- `CAGR`: `0.103562`, meaning about `10.36%` annualized historical growth.
+- `Annualized Volatility`: `0.113274`, meaning about `11.33%` annualized fluctuation.
+- `Max Drawdown`: `-0.249795`, meaning the worst peak-to-trough decline was about `-24.98%`.
+- `Sharpe Ratio`: `0.661986`, a risk-adjusted return estimate after the configured risk-free rate.
+- `Beta`: `0.630975`, lower than the selected benchmark ETF in this run.
+- `Turnover`: `0.020778`, meaning average rebalance turnover was about `2.08%`.
 
 Compare those against `Selected Benchmark ETF` in the same JSON:
 
-- benchmark `CAGR`: `0.108676`
-- benchmark `Annualized Volatility`: `0.171229`
+- benchmark `CAGR`: `0.107071`
+- benchmark `Annualized Volatility`: `0.167165`
 - benchmark `Max Drawdown`: `-0.342362`
-- benchmark `Sharpe Ratio`: `0.513463`
+- benchmark `Sharpe Ratio`: `0.513133`
 
-One reasonable reading is: in this historical run, the optimized strategy had lower CAGR than `VT`, but also lower volatility, lower drawdown, and a higher Sharpe ratio. That does not prove it is better. It means the selected configuration produced a smoother historical path under the modeled assumptions.
+One reasonable reading is: in this historical run, the optimized strategy had lower CAGR than `VT`, but also lower volatility, lower drawdown, and a higher Sharpe ratio. That does not prove it is better. It means the selected configuration produced a smoother historical path under the modeled assumptions. The report's `Statistical uncertainty` assumption line gives a 95% interval for the Sharpe difference that contains zero, so this sample cannot distinguish the two Sharpe ratios, and the `Implementation gap` line shows the realized portfolio is far from the optimizer target.
 
 ## Example 2: Changing ETFs
 
@@ -113,25 +113,25 @@ Use the `etf_universe` sheet to see ticker names, asset classes, regions, curren
 
 The latest realized portfolio in the current workbook is:
 
-- `VTI`: `41.62%`
-- `QQQ`: `18.24%`
-- `IAU`: `10.91%`
-- `BND`: `7.34%`
-- `IEI`: `4.64%`
-- `VEA`: `4.29%`
-- `TLT`: `3.90%`
-- `VNQ`: `3.00%`
-- `TIP`: `3.00%`
-- `GSG`: `2.18%`
+- `VTI`: `41.95%`
+- `QQQ`: `17.92%`
+- `IAU`: `10.95%`
+- `BND`: `6.52%`
+- `TIP`: `5.59%`
+- `VEA`: `4.31%`
+- `TLT`: `4.11%`
+- `IEI`: `4.06%`
+- `GSG`: `2.43%`
+- `VNQ`: `1.29%`
 - `REMX`: `0.82%`
-- `VWO`: `0.05%`
+- `VWO`: `0.04%`
 
 The latest asset-class exposure is:
 
-- equity: `65.02%`
-- fixed income: `18.88%`
-- commodity: `13.10%`
-- real estate: `3.00%`
+- equity: `65.04%`
+- fixed income: `20.29%`
+- commodity: `13.38%`
+- real estate: `1.29%`
 
 These values give you a baseline before changing the universe.
 
@@ -203,7 +203,7 @@ Read the current backtest as a structured historical experiment.
 Open:
 
 ```text
-reports/runs/backtest_run-all-20260424T175044Z-3777911e.json
+reports/runs/backtest_backtest-20261114T031301Z-ee163e1c.json
 ```
 
 Check:
@@ -212,7 +212,7 @@ Check:
 - `optimization_method`: `max_sharpe`
 - `risk_model`: `ledoit_wolf`
 - `expected_return_estimator`: `historical_mean`
-- `start_date`: `2015-01-30`
+- `start_date`: `2014-02-03`
 - `end_date`: `2026-04-24`
 - `data_version.exists`: `true`
 
@@ -247,10 +247,10 @@ Use:
 
 In the current optimized-strategy metrics:
 
-- `Beta`: `0.669599`
-- `Alpha`: `0.019432`
-- `Tracking Error`: `0.069605`
-- `Information Ratio`: `-0.190605`
+- `Beta`: `0.630975`
+- `Alpha`: `0.024932`
+- `Tracking Error`: `0.074237`
+- `Information Ratio`: `-0.145372`
 
 This combination says the strategy had lower benchmark sensitivity and positive model-estimated alpha, but did not deliver attractive excess return per unit of tracking error in this run.
 

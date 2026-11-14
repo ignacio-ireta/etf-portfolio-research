@@ -75,7 +75,12 @@ uv run etf-portfolio optimize --config configs/base.yaml
 uv run etf-portfolio backtest --config configs/base.yaml
 uv run etf-portfolio report --config configs/base.yaml
 uv run etf-portfolio run-all --config configs/base.yaml
+uv run etf-portfolio sensitivity --config configs/base.yaml
 ```
+
+`sensitivity` is not part of `run-all`. It re-runs the backtest over a grid of lookbacks,
+risk-free rates and rebalance modes and writes `reports/metrics/sensitivity.json`
+(see [docs/runbook.md](docs/runbook.md)).
 
 Global flags (available on every subcommand): `--config`, `--log-level
 {debug,info,warning,error}`, `--log-file PATH`, and `etf-portfolio --version`.

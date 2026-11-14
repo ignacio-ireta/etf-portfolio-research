@@ -151,3 +151,33 @@ When adding ETFs, check:
 - Use `enforce_hard` when realized caps must remain hard: contribution-only will allow sell-based fallback rebalances when a realized ticker/class/bond cap is breached.
 - `rebalance.fallback_sell_allowed` plus `rebalance.fallback.sell_allowed_if_absolute_drift_exceeds` remains available for threshold-based sell fallbacks unrelated to hard-cap enforcement.
 - Metrics artifacts are strict JSON and should parse cleanly with `json.loads`; literal `NaN` or `Infinity` in metrics files indicates a regression.
+
+## How To Check Sensitivity To Arbitrary Choices
+
+One backtest is one draw. Before trusting a headline number, check how much it moves when
+choices that have no "right" value are changed:
+
+```bash
+uv run etf-portfolio sensitivity --config configs/base.yaml
+```
+
+This re-runs the walk-forward backtest for every combination of:
+
+- lookback: 252, 504, 756 and 1260 trading days, plus `backtest.lookback_periods`;
+- risk-free rate: 0%, plus `risk_free.value`;
+- rebalance mode: `rebalance.mode`, plus `full_rebalance`.
+
+It writes `reports/metrics/sensitivity.json` and nothing else (the main report and
+`backtest_metrics.json` are not touched). With `configs/base.yaml` it takes well under a minute.
+
+Reading the file:
+
+- Every row in `runs` is scored on the **same** window, starting at `common_start_date`
+  (the latest first-return date across all runs), so rows are comparable.
+- `summary.sharpe_min` and `summary.sharpe_max` show the spread. If the spread is as large
+  as the advantage you care about, that advantage depends on an arbitrary choice.
+- `summary.share_of_runs_beating_benchmark` is the fraction of runs whose Sharpe ratio is
+  above the primary benchmark's on the same window and at the same risk-free rate.
+- Rows with `status` `insufficient_history` or `failed` have `null` metrics and a `reason`.
+
+Record the outcome in `docs/research_log.md` whenever a headline result is published.

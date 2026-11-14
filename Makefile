@@ -1,4 +1,4 @@
-.PHONY: help sync test test-fast lint format typecheck coverage check precommit run handoff-bundle
+.PHONY: help sync test test-fast lint format typecheck coverage check precommit run sensitivity handoff-bundle
 
 help:
 	@echo "Available targets:"
@@ -12,6 +12,7 @@ help:
 	@echo "  check          Run ruff check --fix, ruff format, mypy (advisory), and pytest"
 	@echo "  precommit      Run all pre-commit hooks on all files"
 	@echo "  run            Run the full pipeline using configs/base.yaml"
+	@echo "  sensitivity    Re-run the backtest over lookback/risk-free/rebalance-mode grids"
 	@echo "  handoff-bundle Generate the handoff archive and manifest"
 
 sync:
@@ -46,6 +47,9 @@ precommit:
 
 run:
 	uv run etf-portfolio run-all --config configs/base.yaml
+
+sensitivity:
+	uv run etf-portfolio sensitivity --config configs/base.yaml
 
 handoff-bundle:
 	uv run python scripts/generate_handoff_bundle.py

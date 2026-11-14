@@ -181,6 +181,8 @@ The HTML report is generated from pipeline outputs, not notebook state.
 - Every Sharpe comparison comes with a 95% stationary-bootstrap confidence interval for the Sharpe difference (report assumption line `Statistical uncertainty:`; all benchmarks in `reports/metrics/backtest_metrics.json` under `sharpe_difference_vs_benchmarks`). If the interval contains zero, the sample cannot distinguish the two portfolios.
 - Backtest reporting separates optimizer targets from realized holdings. The Excel bundle includes `optimizer_target_portfolio` and `latest_realized_portfolio`, plus realized-constraint warnings when contribution-only drift breaches configured caps.
 - Transaction costs and slippage are modeled, but execution is still simplified relative to live trading.
+- Taxes are not modeled. The optional `investor_profile` config section (horizon, objective, tax preference) is descriptive only: no calculation reads it.
+- `optimization.default_max_weight_per_etf` applies only to tickers without an entry in `constraints.ticker_bounds`. In `configs/base.yaml` every ticker has its own bounds, so the default has no effect there.
 - Reporting is code-generated; notebooks are research interfaces only.
 - Metrics JSON is written as strict JSON: non-finite values are sanitized, NumPy scalars are unwrapped, pandas timestamps are serialized, and output is written with `allow_nan=False`.
 - ML is disabled by default (`ml.enabled: false`). Enabling it creates research artifacts only; the persisted model is labeled by training scope and remains gated by governance before any portfolio use.

@@ -19,7 +19,6 @@ dependencies = [
   "plotly",
   "pyarrow",
   "pydantic",
-  "pyportfolioopt",
   "pyyaml",
   "scikit-learn",
   "scipy",

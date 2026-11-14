@@ -178,6 +178,13 @@ class DataConfig(BaseModel):
 
 
 class InvestorProfileConfig(BaseModel):
+    """Descriptive context about the intended investor. No calculation reads this.
+
+    The horizon, objective and tax preference are recorded for the reader only. They
+    do not change the optimizer, the backtest, costs, or any metric, and no tax is
+    modeled anywhere in the pipeline.
+    """
+
     horizon_years: int = Field(gt=0)
     objective: str
     tax_preference: str
@@ -497,7 +504,7 @@ class AppConfig(BaseModel):
     universe: UniverseConfig
     benchmark: BenchmarkConfig
     data: DataConfig
-    investor_profile: InvestorProfileConfig
+    investor_profile: InvestorProfileConfig | None = None
     optimization: OptimizationConfig
     constraints: ConstraintsConfig
     rebalance: RebalanceConfig

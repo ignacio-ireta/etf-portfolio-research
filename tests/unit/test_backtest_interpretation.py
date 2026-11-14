@@ -112,13 +112,19 @@ def test_benchmark_suite_aligns_rebalance_mode(monkeypatch: pytest.MonkeyPatch) 
         transaction_cost_rate=0.0015,
     )
 
-    # Should have called for 'min_variance' and 'Previous Optimized Strategy'
-    assert len(captured_kwargs) == 2
+    # Should have called for 'min_variance', 'Previous Optimized Strategy', and the
+    # full-rebalance optimizer target.
+    assert len(captured_kwargs) == 3
     assert [kwargs["optimization_method"] for kwargs in captured_kwargs] == [
         "min_volatility",
         "equal_weight",
+        "equal_weight",
     ]
-    assert all(kwargs["rebalance_mode"] == "contribution_only" for kwargs in captured_kwargs)
+    assert [kwargs["rebalance_mode"] for kwargs in captured_kwargs] == [
+        "contribution_only",
+        "contribution_only",
+        "full_rebalance",
+    ]
     assert all(kwargs["contribution_amount"] == 1000.0 for kwargs in captured_kwargs)
     assert all(kwargs["initial_capital"] == 100000.0 for kwargs in captured_kwargs)
     assert all(

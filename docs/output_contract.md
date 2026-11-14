@@ -16,7 +16,7 @@ in `CHANGELOG.md`. The constant lives at
 
 | Artifact | Path | Description |
 | --- | --- | --- |
-| Backtest metrics | `reports/metrics/backtest_metrics.json` | `schema_version`, `run_id`, `provenance_status`, `optimized_strategy` (metric → value), `benchmarks` (name → metrics), `run_record` (relative path) |
+| Backtest metrics | `reports/metrics/backtest_metrics.json` | `schema_version`, `run_id`, `provenance_status`, `optimized_strategy` (metric → value), `benchmarks` (name → metrics), `implementation_gap` (`rebalance_count`, `mean_one_way_gap`, `max_one_way_gap`, `latest_one_way_gap`, `rebalances_with_constraint_violation`), `run_record` (relative path) |
 | Validation summary | `reports/metrics/validation_summary.json` | `schema_version`, `missing_data_fraction`, `history_coverage`, `suspicious_jump_count` |
 | Run record | `reports/runs/<stage>_<run_id>.json` | `schema_version`, `pipeline_steps`, `git_commit_hash`, `config_hash`, `universe_id`, `data_version`, `output_artifacts` (name → {path, exists, sha256}), method metadata; backtest records also carry `lookback_periods` (observations actually used), `configured_lookback_periods`, and `configured_backtest_start_date` |
 | Pipeline state | `reports/runs/pipeline_state.json` | Per-stage `status`, `input_hash`, `outputs` (path → sha256), timestamps; drives `--resume` |

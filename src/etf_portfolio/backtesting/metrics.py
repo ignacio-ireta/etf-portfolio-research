@@ -292,6 +292,45 @@ def worst_quarter(returns: pd.Series) -> float:
     return float(quarterly.min())
 
 
+def summarize_implementation_gap(
+    target_weights: pd.DataFrame,
+    applied_weights: pd.DataFrame,
+    realized_constraint_violations: pd.DataFrame | None = None,
+) -> dict[str, float | int]:
+    """Summarize how far realized holdings sat from the optimizer target.
+
+    The one-way gap at a rebalance is half the sum of absolute weight differences:
+    the share of the portfolio that would have to be traded to match the target.
+    Assets missing from one frame count as zero weight there.
+    """
+
+    if target_weights.empty or applied_weights.empty:
+        gaps = pd.Series(dtype=float)
+    else:
+        columns = target_weights.columns.union(applied_weights.columns)
+        index = target_weights.index.intersection(applied_weights.index)
+        target = target_weights.reindex(index=index, columns=columns).fillna(0.0)
+        applied = applied_weights.reindex(index=index, columns=columns).fillna(0.0)
+        gaps = (applied - target).abs().sum(axis=1) / 2.0
+
+    violation_rebalances = 0
+    if (
+        realized_constraint_violations is not None
+        and not realized_constraint_violations.empty
+        and "rebalance_date" in realized_constraint_violations.columns
+    ):
+        violation_rebalances = int(realized_constraint_violations["rebalance_date"].nunique())
+
+    rebalance_count = len(gaps)
+    return {
+        "rebalance_count": rebalance_count,
+        "mean_one_way_gap": float(gaps.mean()) if rebalance_count else 0.0,
+        "max_one_way_gap": float(gaps.max()) if rebalance_count else 0.0,
+        "latest_one_way_gap": float(gaps.iloc[-1]) if rebalance_count else 0.0,
+        "rebalances_with_constraint_violation": violation_rebalances,
+    }
+
+
 def summarize_backtest_metrics(
     portfolio_returns: pd.Series,
     *,
@@ -570,6 +609,7 @@ __all__ = [
     "sharpe_ratio",
     "sortino_ratio",
     "summarize_backtest_metrics",
+    "summarize_implementation_gap",
     "tracking_error",
     "turnover",
     "worst_month",

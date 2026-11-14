@@ -267,3 +267,25 @@ It should clarify:
 - what the backtest excludes
 
 If the assumptions do not match the question you care about, the report may not answer that question.
+
+## Implementation gap: realized holdings versus the optimizer target
+
+The row called **Optimized Strategy** is the *realized* portfolio under the configured
+rebalance mode. In `contribution_only` mode the portfolio never sells, so new cash is the
+only tool for moving toward the optimizer target. When contributions are small compared
+with the portfolio, realized holdings can sit far from the target for years.
+
+The report states this in three places:
+
+- The assumption line that starts with `Implementation gap:` gives the average and maximum
+  one-way gap (the share of the portfolio that would have to be traded to match the
+  target) and how many rebalances ended with at least one configured constraint broken.
+- `reports/metrics/backtest_metrics.json` carries the same numbers under
+  `implementation_gap`.
+- The benchmark row **Optimizer Target (Full Rebalance)** shows the same optimizer followed
+  exactly (sells allowed, same costs). It is present whenever `rebalance.mode` is not
+  `full_rebalance`.
+
+How to read them together: if **Optimized Strategy** beats **Optimizer Target (Full
+Rebalance)**, the result came from *not* following the optimizer (drift), not from the
+optimizer's choices. Do not credit the optimizer for it.

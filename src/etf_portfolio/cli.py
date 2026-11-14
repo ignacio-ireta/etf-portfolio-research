@@ -12,7 +12,10 @@ import pandas as pd
 
 from etf_portfolio import __version__
 from etf_portfolio.backtesting.engine import run_walk_forward_backtest
-from etf_portfolio.backtesting.metrics import calculate_sharpe_ratio
+from etf_portfolio.backtesting.metrics import (
+    calculate_sharpe_ratio,
+    summarize_implementation_gap,
+)
 from etf_portfolio.config import AppConfig, OptimizationObjective, load_config
 from etf_portfolio.data.ingest import ingest_price_data, load_etf_universe_metadata
 from etf_portfolio.data.providers import (
@@ -67,6 +70,8 @@ from etf_portfolio.tracking import (
 )
 
 BACKTEST_START_DELAY_WARNING_DAYS = 45
+OPTIMIZER_TARGET_LABEL = "Optimizer Target (Full Rebalance)"
+IMPLEMENTATION_GAP_WARNING_THRESHOLD = 0.10
 LOGGER = get_logger(__name__)
 FIXED_INCOME_ASSET_CLASS = "fixed_income"
 ML_MODEL_TRAINING_SCOPE = "train_split"
@@ -552,6 +557,31 @@ def run_backtest(
                 "lookback; the first rebalance was delayed."
             ),
         )
+    gap_summary = summarize_implementation_gap(
+        backtest_result.target_weights,
+        backtest_result.applied_weights,
+        backtest_result.realized_constraint_violations,
+    )
+    if float(gap_summary["mean_one_way_gap"]) > IMPLEMENTATION_GAP_WARNING_THRESHOLD:
+        log_event(
+            LOGGER,
+            logging.WARNING,
+            "implementation_gap_large",
+            run_id=stage_run_id,
+            stage="backtest",
+            config_path=str(config_path),
+            rebalance_mode=config.rebalance.mode,
+            mean_one_way_gap=float(gap_summary["mean_one_way_gap"]),
+            max_one_way_gap=float(gap_summary["max_one_way_gap"]),
+            rebalances_with_constraint_violation=int(
+                gap_summary["rebalances_with_constraint_violation"]
+            ),
+            rebalance_count=int(gap_summary["rebalance_count"]),
+            reason=(
+                "Realized holdings are far from the optimizer target; the simulated "
+                "portfolio is not the optimizer's portfolio."
+            ),
+        )
     in_sample_returns = asset_returns.loc[asset_returns.index < backtest_result.weights.index[-1]]
     expected_returns = estimate_expected_returns(
         in_sample_returns,
@@ -623,6 +653,7 @@ def run_backtest(
             run_id=stage_run_id,
             lookback_periods=effective_lookback,
             effective_start_date=effective_start_date,
+            implementation_gap=gap_summary,
         ),
         limitations=_report_limitations(config),
         asset_returns=asset_returns,
@@ -661,6 +692,7 @@ def run_backtest(
         "run_id": stage_run_id,
         "optimized_strategy": strategy_metrics_payload,
         "benchmarks": metrics_by_strategy,
+        "implementation_gap": gap_summary,
     }
     if tracking_provenance is not None:
         metrics_payload["provenance_status"] = tracking_provenance["provenance_status"]
@@ -1261,6 +1293,7 @@ def _report_assumptions(
     run_id: str | None = None,
     lookback_periods: int | None = None,
     effective_start_date: pd.Timestamp | None = None,
+    implementation_gap: dict[str, float | int] | None = None,
 ) -> dict[str, str]:
     assumptions = {
         "data_provider": f"Data provider: {config.data.provider}",
@@ -1318,6 +1351,23 @@ def _report_assumptions(
             "for estimation only. If the first simulated return is much later than the "
             "configured start, the data history was too short to fill the lookback."
         )
+    if implementation_gap is not None:
+        gap_text = (
+            "Implementation gap: right after each rebalance, realized holdings differed "
+            "from the optimizer target by "
+            f"{float(implementation_gap['mean_one_way_gap']):.1%} of the portfolio on "
+            f"average (one-way; maximum {float(implementation_gap['max_one_way_gap']):.1%}). "
+            "Realized holdings broke at least one configured constraint at "
+            f"{int(implementation_gap['rebalances_with_constraint_violation'])} of "
+            f"{int(implementation_gap['rebalance_count'])} rebalances."
+        )
+        if config.rebalance.mode != "full_rebalance":
+            gap_text += (
+                f" 'Optimized Strategy' is the realized {config.rebalance.mode} portfolio, "
+                f"not the optimizer target; the row '{OPTIMIZER_TARGET_LABEL}' shows the "
+                "same optimizer followed exactly."
+            )
+        assumptions["implementation_gap"] = gap_text
     if run_id is not None:
         assumptions["run_id"] = f"Run ID: {run_id}"
     return assumptions
@@ -1501,6 +1551,30 @@ def _build_benchmark_suite(
     )
     suite["Previous Optimized Strategy"] = previous_result.portfolio_returns
     benchmark_weights["Previous Optimized Strategy"] = previous_result.weights
+    if config.rebalance.mode != "full_rebalance":
+        target_result = run_walk_forward_backtest(
+            asset_returns,
+            rebalance_dates=rebalance_dates,
+            lookback_periods=lookback_periods,
+            optimization_method=_select_optimization_method(config),
+            max_weight=config.optimization.default_max_weight_per_etf,
+            transaction_cost_rate=transaction_cost_rate,
+            asset_classes=asset_classes,
+            asset_class_bounds=asset_class_bounds,
+            ticker_bounds=ticker_bounds,
+            bond_assets=bond_assets,
+            min_bond_exposure=min_bond_exposure,
+            expense_ratios=expense_ratios,
+            risk_free_rate=risk_free_rate,
+            rebalance_mode="full_rebalance",
+            contribution_amount=config.rebalance.contribution_amount,
+            initial_capital=config.backtest.initial_capital,
+            realized_constraint_policy=config.rebalance.realized_constraint_policy,
+            covariance_method=config.optimization.risk_model,
+            expected_return_method=config.optimization.expected_return_estimator,
+        )
+        suite[OPTIMIZER_TARGET_LABEL] = target_result.portfolio_returns
+        benchmark_weights[OPTIMIZER_TARGET_LABEL] = target_result.weights
     return BenchmarkSuiteArtifacts(returns=suite, weights=benchmark_weights)
 
 

@@ -31,6 +31,32 @@ Brought the project into compliance with the adapted engineering standards
   populated `.env.example`.
 
 ### Changed
+- Report presentation redesigned as a printed research note (no numbers, metrics,
+  file names, or JSON keys changed):
+  - `latest_report.html` drops the stacked cards for a masthead with real run facts
+    (run id, backtest window, rebalances, universe, headline metrics), numbered
+    sections with margin headings, numbered and captioned figures, and ruled tables
+    with tabular monospace numerals. System font stacks only; still self-contained.
+  - One figure language for the interactive charts and the PNG exports: the
+    optimized strategy is the single warm accent, benchmarks keep fixed cool hues,
+    gridlines are hairlines, legends are unboxed, key series are labelled directly,
+    and hover shows formatted values per date.
+  - Benchmark comparison is now four small multiples (one scale per metric) instead
+    of one grouped bar chart mixing ratios and percentages; asset-class and region
+    exposure are sorted labelled bars instead of donuts; the weighted expense ratio
+    is drawn as a step line.
+  - `frontier.html` is rendered with the same layout instead of a bare Plotly page.
+  - PNG exports are rendered at 1000x600 CSS px, scale 2.8 (still 2800x1680 px) so
+    type is legible at gallery size.
+  - New `reporting/layout.py`; `plots.py` splits `build_*` (compute) from `render_*`
+    (style). `build_group_exposure_pie_figure` was removed in favour of
+    `build_group_exposure_figure`.
+- The committed `reports/html/*.html` and `reports/figures/*.png` were re-rendered
+  from the series and table cells stored in the previous report
+  (`scripts/restyle_committed_reports.py`), not by re-running the pipeline, so every
+  published number is unchanged. Consequence: the `sha256` values recorded for those
+  files in `reports/runs/backtest_run-all-20260425T083756Z-f6f9560b.json` describe
+  the pre-restyle renderings.
 - Data validation and provenance failures now raise typed domain exceptions
   (still subclassing `ValueError`/`RuntimeError` for backward compatibility).
 - Package version is dynamic, sourced from `etf_portfolio.__version__`.

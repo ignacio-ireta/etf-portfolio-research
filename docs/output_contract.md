@@ -22,9 +22,10 @@ in `CHANGELOG.md`. The constant lives at
 | Pipeline state | `reports/runs/pipeline_state.json` | Per-stage `status`, `input_hash`, `outputs` (path → sha256), timestamps; drives `--resume` |
 | Errors report | `reports/runs/<run_id>/errors.json` | Failed/interrupted/blocked stages with `error_code` and `reason` (written only on failure/interruption) |
 | Run log | `reports/runs/<run_id>/run.log` | Per-run structured JSON log (for `run-all` or when `--log-file` is given) |
-| HTML report | `reports/html/latest_report.html` | Narrative report bundle (reader guide, metric dictionary, trust & safety, tables, figures, assumptions) |
+| HTML report | `reports/html/latest_report.html` | Self-contained narrative report (reader guide, metric dictionary, trust & safety, numbered tables and figures, assumptions). `reports/html/backtest_report.html` is a byte-identical legacy copy |
+| Frontier explorer | `reports/html/frontier.html` | Self-contained interactive efficient-frontier page from the `optimize` stage |
 | Excel workbook | `reports/excel/portfolio_results.xlsx` | Metrics, weights history, exposures, attribution, assumptions sheets |
-| Figures | `reports/figures/*.png` | Static chart exports |
+| Figures | `reports/figures/*.png` | Static exports of the report's figures, 2800x1680 px, same palette and type as the HTML |
 
 All final files are written **atomically** (temp file + `os.replace`); a reader
 never observes a partially written artifact.

@@ -8,6 +8,18 @@ reports/html/latest_report.html
 
 The report is generated from pipeline outputs. It is not manually edited and does not depend on notebook state.
 
+## How The Page Is Laid Out
+
+The report is set as a printed research note rather than a dashboard:
+
+- **Masthead.** Title, run id, backtest window, rebalance count, and the ETF universe, all taken from the run, followed by the optimized strategy's four headline metrics and a contents list.
+- **Numbered sections.** Each section has its number and name in the margin, a three-part "How to read this section" note, and then its tables and figures. Rules separate sections; nothing is boxed.
+- **Figures.** Every chart is a numbered figure (`Fig. 6`) with a caption saying what it shows. Charts are interactive: hover for exact values on a date, drag to zoom, double-click to reset.
+- **Tables.** Every table is numbered and ruled, with numbers in tabular monospace. Table values are the pipeline's values, unformatted beyond six decimals, so they can be checked against `reports/metrics/backtest_metrics.json`.
+- **Colour.** The optimized strategy is the one warm colour in every figure. The selected benchmark ETF is navy; the other benchmarks are cool hues, and each keeps its hue from figure to figure. Holdings charts (weights, exposure) use a separate cool palette and never the strategy colour.
+
+The page is light in every colour scheme, like the paper it imitates, and is fully self-contained (system fonts, inline Plotly), so it works offline. The exported PNGs in `reports/figures/` are the same figures with the same palette and type.
+
 ## Suggested Reading Order
 
 Read the report in this order:

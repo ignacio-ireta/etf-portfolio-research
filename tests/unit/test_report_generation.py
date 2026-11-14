@@ -239,3 +239,103 @@ def test_generate_report_bundle_passes_constraint_bundle_to_frontier(monkeypatch
     assert captured[0]["bond_assets"] == ["BBB"]
     assert captured[0]["min_bond_exposure"] == 0.10
     assert captured[0]["expense_ratios"] is expense_ratios
+
+
+def test_ruled_table_keeps_cell_text_and_marks_numeric_columns() -> None:
+    from etf_portfolio.reporting.layout import ruled_table, table_cells, table_html
+
+    frame = pd.DataFrame(
+        {
+            "Strategy": ["Optimized Strategy", "A & B <benchmark>"],
+            "CAGR": [0.104314, -0.05],
+            "rebalance_date": pd.to_datetime(["2024-03-31", "2024-05-31"]),
+        }
+    )
+    frame.columns.name = "Metric"
+    source = table_html(frame)
+    rendered = ruled_table(source)
+
+    source_header, source_rows = table_cells(source)
+    header, rows = table_cells(rendered)
+    # pandas' empty index-name column is dropped; every other cell is verbatim.
+    assert header == source_header[1:]
+    assert rows == [row[1:] for row in source_rows]
+    assert '<td class="num">0.104314</td>' in rendered
+    assert '<td class="num">-0.050000</td>' in rendered
+    assert '<td class="date">2024-03-31</td>' in rendered
+    assert "<td>A &amp; B &lt;benchmark&gt;</td>" in rendered
+
+
+def test_strategy_takes_the_accent_and_benchmarks_keep_fixed_colors() -> None:
+    from etf_portfolio.reporting import plots
+
+    names = ["Portfolio", "Selected Benchmark ETF", "60/40 Portfolio", "custom_baseline"]
+    colors = plots.series_colors(names)
+    assert colors["Portfolio"] == plots.ACCENT
+    assert colors["Selected Benchmark ETF"] == plots.PRIMARY_BENCHMARK
+    assert plots.ACCENT not in {colors[name] for name in names[1:]}
+    # Colour follows the entity, not its position in the list.
+    reordered = plots.series_colors(["60/40 Portfolio", "Portfolio"])
+    assert reordered["60/40 Portfolio"] == colors["60/40 Portfolio"]
+
+    dates = pd.date_range("2024-01-31", periods=4, freq="ME")
+    returns = pd.Series([0.01, -0.02, 0.015, 0.01], index=dates, name="portfolio")
+    benchmark = pd.Series([0.008, -0.01, 0.011, 0.009], index=dates, name="benchmark")
+    for figure in (
+        plots.build_cumulative_returns_figure(returns, benchmark_returns=benchmark),
+        plots.build_drawdown_figure(returns, benchmark_returns=benchmark),
+    ):
+        strategy = [trace for trace in figure.data if trace.name == plots.STRATEGY_LABEL]
+        assert len(strategy) == 1
+        assert strategy[0].line.color == plots.ACCENT
+        assert figure.layout.paper_bgcolor == plots.PAPER
+
+
+def test_report_page_is_an_unboxed_numbered_note(tmp_path) -> None:
+    from etf_portfolio.reporting.layout import (
+        FigureBlock,
+        ReportMeta,
+        ReportSection,
+        TableBlock,
+        render_report_page,
+        table_html,
+    )
+
+    figure = go.Figure(go.Scatter(x=[1, 2], y=[1, 2]))
+    figure.update_layout(title_text="Hidden in the page, kept in the PNG")
+    page = render_report_page(
+        title="etf_portfolio_research Backtest Report",
+        lede="Lede.",
+        disclaimer="Disclaimer.",
+        meta=ReportMeta(
+            run_id="run-all-20260425T083756Z-f6f9560b",
+            window_start="2015-02-02",
+            window_end="2026-04-24",
+            tickers=("VTI", "BND"),
+            rebalance_count=135,
+            last_rebalance="2026-03-31",
+            headline=(("CAGR", "10.4%"),),
+        ),
+        sections=[
+            ReportSection(
+                title="Backtest Performance",
+                blocks=(
+                    TableBlock(table_html(pd.DataFrame({"Strategy": ["A"], "CAGR": [0.1]}))),
+                    FigureBlock("cumulative_returns", figure),
+                ),
+            )
+        ],
+    )
+
+    assert "<h1>ETF Portfolio Research Backtest Report</h1>" in page
+    assert "run-all-20260425T083756Z-f6f9560b" in page
+    assert "2015-02-02 → 2026-04-24" in page
+    assert 'class="card' not in page
+    assert '<span class="ref">Fig. 1</span>' in page
+    assert '<span class="ref">Table 1</span>' in page
+    assert "Cumulative returns. Compounded return" in page
+    assert "Hidden in the page" not in page
+    # Self-contained: no remote stylesheets, fonts, or scripts.
+    assert "<link" not in page
+    assert "src=" not in page.split("</script>", 1)[1]
+    assert figure.layout.title.text == "Hidden in the page, kept in the PNG"

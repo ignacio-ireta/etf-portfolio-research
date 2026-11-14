@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import html
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,19 +10,34 @@ from typing import Any
 
 import pandas as pd
 from plotly.graph_objects import Figure
-from plotly.io import to_html, write_image
-from plotly.offline import get_plotlyjs
+from plotly.io import write_image
 
 from etf_portfolio.backtesting.engine import WalkForwardBacktestResult
 from etf_portfolio.io_utils import atomic_path, atomic_write_bytes, atomic_write_text
 from etf_portfolio.logging_config import get_logger, log_event
 from etf_portfolio.metric_dictionary import metric_dictionary_table
+from etf_portfolio.reporting.layout import (
+    Block,
+    FigureBlock,
+    ListBlock,
+    ReportMeta,
+    ReportSection,
+    TableBlock,
+    TextBlock,
+    headline_from_metrics,
+    render_frontier_page,
+    render_report_page,
+    table_html,
+)
 from etf_portfolio.reporting.plots import (
+    FIGURE_EXPORT_HEIGHT,
+    FIGURE_EXPORT_SCALE,
+    FIGURE_EXPORT_WIDTH,
     build_benchmark_comparison_figure,
     build_cumulative_returns_figure,
     build_drawdown_figure,
     build_efficient_frontier_figure,
-    build_group_exposure_pie_figure,
+    build_group_exposure_figure,
     build_rolling_correlation_figure,
     build_rolling_sharpe_figure,
     build_rolling_volatility_figure,
@@ -58,6 +72,16 @@ RESEARCH_TOOL_DISCLAIMER = (
     "This report is for research and education only. It is not financial advice, "
     "investment advice, tax advice, legal advice, or a recommendation to buy or sell "
     "any security."
+)
+REPORT_LEDE = (
+    "Code-generated research report built from pipeline outputs. Use it to understand "
+    "model behavior, assumptions, risk, and historical simulations; do not treat it as "
+    "a recommendation."
+)
+FRONTIER_LEDE = (
+    "The risk and return combinations the optimizer could reach under the configured "
+    "constraints, with each ETF and the optimized portfolio marked. Hover a point for "
+    "its exact values; drag to zoom."
 )
 EXECUTION_COST_LIMITATION = (
     "Transaction costs and configured slippage are modeled as simple bps assumptions; "
@@ -419,13 +443,14 @@ def generate_html_report(
     bond_assets: list[str] | None = None,
     min_bond_exposure: float | None = None,
     expense_ratios: pd.Series | None = None,
+    run_id: str | None = None,
 ) -> Path:
     """Generate the consolidated HTML report."""
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    sections = _build_report_sections(
+    sections, strategy_metrics = _build_report_sections(
         backtest_result,
         expected_returns=expected_returns,
         covariance_matrix=covariance_matrix,
@@ -450,143 +475,17 @@ def generate_html_report(
         expense_ratios=expense_ratios,
     )
 
-    report_html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{html.escape(title)}</title>
-  <script type="text/javascript">{get_plotlyjs()}</script>
-  <style>
-    :root {{
-      --bg: #f4f1ea;
-      --paper: #fffdf8;
-      --ink: #182029;
-      --muted: #5e6b75;
-      --accent: #9f4f2a;
-      --border: #d8cfc2;
-    }}
-    body {{
-      font-family: "Georgia", "Iowan Old Style", serif;
-      margin: 0;
-      color: var(--ink);
-      background:
-        radial-gradient(circle at top right, rgba(159, 79, 42, 0.12), transparent 28rem),
-        linear-gradient(180deg, #f2ede3 0%, var(--bg) 60%, #ece6db 100%);
-    }}
-    main {{
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 2rem 1rem 4rem;
-    }}
-    header {{
-      margin-bottom: 1.5rem;
-      padding: 2rem 0 1rem;
-    }}
-    h1, h2, h3 {{
-      color: #101820;
-      margin-top: 0;
-    }}
-    h1 {{
-      font-size: 2.4rem;
-      margin-bottom: 0.25rem;
-    }}
-    p.lede {{
-      color: var(--muted);
-      font-size: 1.05rem;
-      max-width: 48rem;
-    }}
-    .disclaimer {{
-      background: #fff4df;
-      border: 1px solid #e6b979;
-      border-radius: 14px;
-      color: #5b3515;
-      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
-      font-size: 0.95rem;
-      margin-top: 1rem;
-      max-width: 56rem;
-      padding: 0.85rem 1rem;
-    }}
-    .card {{
-      background: rgba(255, 253, 248, 0.94);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      box-shadow: 0 16px 40px rgba(24, 32, 41, 0.08);
-      margin-bottom: 1.25rem;
-      overflow: hidden;
-    }}
-    .card-inner {{
-      padding: 1.15rem 1.25rem;
-    }}
-    .grid {{
-      display: grid;
-      gap: 1.25rem;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    }}
-    .section-explanation {{
-      background: #f8f2e9;
-      border-left: 4px solid var(--accent);
-      border-radius: 12px;
-      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
-      margin: 0.75rem 0 1rem;
-      padding: 0.85rem 1rem;
-    }}
-    .section-explanation p {{
-      margin: 0.25rem 0;
-    }}
-    .section-explanation .eyebrow {{
-      color: var(--accent);
-      font-size: 0.78rem;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }}
-    .reader-guide {{
-      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
-    }}
-    .reader-guide p {{
-      margin-top: 0;
-    }}
-    table {{
-      border-collapse: collapse;
-      width: 100%;
-      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
-      font-size: 0.92rem;
-    }}
-    th, td {{
-      border-bottom: 1px solid #e7ddd1;
-      padding: 0.65rem 0.75rem;
-      text-align: left;
-      vertical-align: top;
-    }}
-    th {{
-      background: #f7f1e8;
-    }}
-    ul {{
-      margin: 0;
-      padding-left: 1.2rem;
-    }}
-    .figure-block > div {{
-      min-height: 360px;
-    }}
-  </style>
-</head>
-<body>
-  <main>
-    <header>
-      <h1>{html.escape(title)}</h1>
-      <p class="lede">
-        Code-generated research report built from pipeline outputs. Use it to understand
-        model behavior, assumptions, risk, and historical simulations; do not treat it as
-        a recommendation.
-      </p>
-      <div class="disclaimer">{html.escape(RESEARCH_TOOL_DISCLAIMER)}</div>
-    </header>
-    {"".join(_render_section(title, content) for title, content in sections)}
-  </main>
-</body>
-</html>
-"""
+    report_html = render_report_page(
+        title=title,
+        lede=REPORT_LEDE,
+        disclaimer=RESEARCH_TOOL_DISCLAIMER,
+        meta=_build_report_meta(
+            backtest_result,
+            run_id=run_id,
+            strategy_metrics=strategy_metrics,
+        ),
+        sections=sections,
+    )
 
     atomic_write_text(output, report_html)
     return output
@@ -620,6 +519,7 @@ def generate_report_bundle(
     bond_assets: list[str] | None = None,
     min_bond_exposure: float | None = None,
     expense_ratios: pd.Series | None = None,
+    run_id: str | None = None,
 ) -> ReportArtifacts:
     """Generate the HTML report, Excel workbook, and exported figures."""
 
@@ -648,6 +548,7 @@ def generate_report_bundle(
         bond_assets=bond_assets,
         min_bond_exposure=min_bond_exposure,
         expense_ratios=expense_ratios,
+        run_id=run_id,
     )
 
     workbook_path = _write_report_workbook(
@@ -720,7 +621,7 @@ def _build_report_sections(
     bond_assets: list[str] | None,
     min_bond_exposure: float | None,
     expense_ratios: pd.Series | None,
-) -> list[tuple[str, str]]:
+) -> tuple[list[ReportSection], dict[str, Any]]:
     metrics_table = build_metrics_table(
         backtest_result.portfolio_returns,
         weights=backtest_result.weights,
@@ -761,25 +662,25 @@ def _build_report_sections(
         expense_ratios=expense_ratios,
     )
 
-    sections: list[tuple[str, str]] = [
-        (
+    sections: list[ReportSection] = [
+        _section(
             "Reader Guide",
-            _build_reader_guide_section(
+            *_build_reader_guide_section(
                 backtest_result,
                 benchmark_returns=benchmark_returns,
                 primary_benchmark_returns=primary_benchmark_returns,
                 metadata=metadata,
                 prices=prices,
             ),
-        )
+        ),
+        _section("Trust And Safety", _table(common_false_conclusions_table())),
+        _section("Metric Dictionary", _table(metric_dictionary_table())),
     ]
-    sections.append(("Trust And Safety", _table_html(common_false_conclusions_table())))
-    sections.append(("Metric Dictionary", _table_html(metric_dictionary_table())))
     if metadata is not None:
         sections.append(
-            (
+            _section(
                 "ETF Universe Summary",
-                _table_html(
+                _table(
                     build_etf_universe_summary_table(
                         metadata,
                         tickers=backtest_result.weights.columns.tolist(),
@@ -788,28 +689,26 @@ def _build_report_sections(
             )
         )
     if prices is not None:
-        coverage_table = build_data_coverage_table(prices, metadata=metadata)
-        missing_table = build_missing_data_table(prices)
         sections.extend(
             [
-                ("Data Coverage Table", _table_html(coverage_table)),
-                ("Missing Data Table", _table_html(missing_table)),
+                _section(
+                    "Data Coverage Table",
+                    _table(build_data_coverage_table(prices, metadata=metadata)),
+                ),
+                _section("Missing Data Table", _table(build_missing_data_table(prices))),
             ]
         )
     sections.extend(
         [
-            ("Efficient Frontier Chart", _figure_html(figures["efficient_frontier"])),
-            ("Latest Realized Portfolio Table", _table_html(latest_realized_weights)),
-            ("Optimizer Target Portfolio Table", _table_html(optimizer_target_weights)),
-            (
-                "Portfolio Weights",
-                _figure_html(figures["portfolio_weights"]),
-            ),
+            _section("Efficient Frontier Chart", _figure("efficient_frontier", figures)),
+            _section("Latest Realized Portfolio Table", _table(latest_realized_weights)),
+            _section("Optimizer Target Portfolio Table", _table(optimizer_target_weights)),
+            _section("Portfolio Weights", _figure("portfolio_weights", figures)),
         ]
     )
     if metadata is not None:
-        exposure_blocks = [
-            _table_html(
+        exposure_blocks: list[Block] = [
+            _table(
                 build_group_exposure_table(
                     backtest_result.weights,
                     metadata,
@@ -817,12 +716,12 @@ def _build_report_sections(
                     label="Asset Class",
                 )
             ),
-            _figure_html(figures["asset_class_exposure"]),
+            _figure("asset_class_exposure", figures),
         ]
         if "region" in metadata.columns:
             exposure_blocks.extend(
                 [
-                    _table_html(
+                    _table(
                         build_group_exposure_table(
                             backtest_result.weights,
                             metadata,
@@ -830,70 +729,48 @@ def _build_report_sections(
                             label="Region",
                         )
                     ),
-                    _figure_html(figures["region_exposure"]),
+                    _figure("region_exposure", figures),
                 ]
             )
-        sections.append(("Exposure", _combine_blocks(exposure_blocks)))
-    sections.append(
-        (
-            "Benchmark Comparison",
-            _combine_blocks(
-                [
-                    _table_html(metrics_table),
-                    _figure_html(figures["benchmark_comparison"]),
-                ]
-            ),
-        )
-    )
+        sections.append(_section("Exposure", *exposure_blocks))
     sections.extend(
         [
-            (
+            _section(
+                "Benchmark Comparison",
+                _table(metrics_table),
+                _figure("benchmark_comparison", figures),
+            ),
+            _section(
                 "Backtest Performance",
-                _combine_blocks(
-                    [
-                        _table_html(metrics_table),
-                        _figure_html(figures["cumulative_returns"]),
-                    ]
-                ),
+                _table(metrics_table),
+                _figure("cumulative_returns", figures),
             ),
-            ("Drawdown Chart", _figure_html(figures["drawdown"])),
-            (
+            _section("Drawdown Chart", _figure("drawdown", figures)),
+            _section(
                 "Rolling Risk Metrics",
-                _combine_blocks(
-                    [
-                        _figure_html(figures["rolling_volatility"]),
-                        _figure_html(figures["rolling_sharpe"]),
-                        _figure_html(figures["rolling_correlation"]),
-                    ]
-                ),
+                _figure("rolling_volatility", figures),
+                _figure("rolling_sharpe", figures),
+                _figure("rolling_correlation", figures),
             ),
-            (
+            _section(
                 "Stress Periods",
-                _combine_blocks(
-                    [
-                        _table_html(stress_table),
-                        _figure_html(figures["stress_periods"]),
-                    ]
-                ),
+                _table(stress_table),
+                _figure("stress_periods", figures),
             ),
         ]
     )
 
     if metadata is not None and "expense_ratio" in metadata.columns:
         sections.append(
-            (
+            _section(
                 "Weighted Expense Ratio Over Time",
-                _combine_blocks(
-                    [
-                        _table_html(
-                            build_weighted_expense_over_time_table(
-                                backtest_result.weights,
-                                metadata,
-                            )
-                        ),
-                        _figure_html(figures["weighted_expense_over_time"]),
-                    ]
+                _table(
+                    build_weighted_expense_over_time_table(
+                        backtest_result.weights,
+                        metadata,
+                    )
                 ),
+                _figure("weighted_expense_over_time", figures),
             )
         )
 
@@ -903,7 +780,7 @@ def _build_report_sections(
         metadata=metadata,
     )
     if return_attr_table is not None:
-        sections.append(("Return Attribution", _table_html(return_attr_table)))
+        sections.append(_section("Return Attribution", _table(return_attr_table)))
 
     risk_attr_table = _build_risk_attribution_table(
         backtest_result.weights,
@@ -911,21 +788,18 @@ def _build_report_sections(
         metadata=metadata,
     )
     if risk_attr_table is not None:
-        sections.append(("Risk Attribution", _table_html(risk_attr_table)))
+        sections.append(_section("Risk Attribution", _table(risk_attr_table)))
 
     realized_constraint_warnings = _build_realized_constraint_warning_table(backtest_result)
     if realized_constraint_warnings is not None:
         sections.append(
-            (
-                "Realized Constraint Warnings",
-                _table_html(realized_constraint_warnings),
-            )
+            _section("Realized Constraint Warnings", _table(realized_constraint_warnings))
         )
 
     sections.append(
-        (
+        _section(
             "Assumptions and Limitations",
-            _build_assumptions_appendix(
+            *_build_assumptions_appendix(
                 backtest_result,
                 metadata=metadata,
                 primary_benchmark_returns=primary_benchmark_returns,
@@ -937,7 +811,87 @@ def _build_report_sections(
             ),
         )
     )
-    return sections
+    return sections, _strategy_metrics(metrics_table)
+
+
+def _strategy_metrics(metrics_table: pd.DataFrame) -> dict[str, Any]:
+    """Pick the optimized strategy's metrics out of either metrics-table shape."""
+
+    if "Strategy" in metrics_table.columns:
+        rows = metrics_table.loc[metrics_table["Strategy"] == "Optimized Strategy"]
+        if rows.empty:
+            return {}
+        return {str(key): value for key, value in rows.iloc[0].items()}
+    if "Value" in metrics_table.columns and len(metrics_table.columns) == 2:
+        label_column = next(column for column in metrics_table.columns if column != "Value")
+        return {
+            str(label): value
+            for label, value in zip(
+                metrics_table[label_column], metrics_table["Value"], strict=True
+            )
+        }
+    return {}
+
+
+def _section(title: str, *blocks: Block) -> ReportSection:
+    return ReportSection(
+        title=title,
+        blocks=tuple(blocks),
+        notes=SECTION_EXPLANATIONS.get(title, ()),
+    )
+
+
+def _table(table: pd.DataFrame) -> TableBlock:
+    return TableBlock(table_html(table))
+
+
+def _figure(name: str, figures: dict[str, Figure]) -> FigureBlock:
+    return FigureBlock(name, figures[name])
+
+
+def _build_report_meta(
+    backtest_result: WalkForwardBacktestResult,
+    *,
+    run_id: str | None,
+    strategy_metrics: dict[str, Any],
+) -> ReportMeta:
+    """Collect the run facts shown in the masthead from the run itself."""
+
+    returns = backtest_result.portfolio_returns
+    weights = backtest_result.weights
+    return ReportMeta(
+        run_id=run_id,
+        window_start=None if returns.empty else str(returns.index.min().date()),
+        window_end=None if returns.empty else str(returns.index.max().date()),
+        tickers=tuple(str(column) for column in weights.columns),
+        rebalance_count=len(weights.index),
+        last_rebalance=None if weights.empty else str(weights.index.max().date()),
+        headline=headline_from_metrics(strategy_metrics),
+    )
+
+
+def write_frontier_page(
+    figure: Figure,
+    output_path: str | Path,
+    *,
+    tickers: list[str] | tuple[str, ...] = (),
+    run_id: str | None = None,
+) -> Path:
+    """Write the standalone efficient-frontier explorer page."""
+
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(
+        output,
+        render_frontier_page(
+            figure,
+            lede=FRONTIER_LEDE,
+            disclaimer=RESEARCH_TOOL_DISCLAIMER,
+            meta=ReportMeta(run_id=run_id, tickers=tuple(str(ticker) for ticker in tickers)),
+            notes=SECTION_EXPLANATIONS["Efficient Frontier Chart"],
+        ),
+    )
+    return output
 
 
 def _build_reader_guide_section(
@@ -947,7 +901,7 @@ def _build_reader_guide_section(
     primary_benchmark_returns: pd.Series | None,
     metadata: pd.DataFrame | None,
     prices: pd.DataFrame | None,
-) -> str:
+) -> tuple[Block, ...]:
     """Build a plain-language opening section for non-specialist readers."""
 
     latest_rebalance = (
@@ -1014,14 +968,13 @@ def _build_reader_guide_section(
         "cannot tell you.",
     ]
     return (
-        '<div class="reader-guide">'
-        "<p>"
-        "This opening guide is meant to make the report readable before you inspect the "
-        "tables and charts. The results are conditional on the configured inputs and "
-        "should be interpreted as a historical research experiment."
-        "</p>"
-        f"{_combine_blocks([_table_html(guide_rows), _bullet_list_html(reading_order)])}"
-        "</div>"
+        TextBlock(
+            "This opening guide is meant to make the report readable before you inspect the "
+            "tables and charts. The results are conditional on the configured inputs and "
+            "should be interpreted as a historical research experiment."
+        ),
+        _table(guide_rows),
+        ListBlock(tuple(reading_order)),
     )
 
 
@@ -1091,7 +1044,7 @@ def _build_figures(
         figures["benchmark_comparison"] = build_cumulative_returns_figure(
             backtest_result.portfolio_returns,
         )
-        figures["benchmark_comparison"].update_layout(title="Benchmark Comparison Unavailable")
+        figures["benchmark_comparison"].update_layout(title_text="Benchmark comparison unavailable")
     if primary_benchmark_returns is not None:
         figures["rolling_correlation"] = build_rolling_correlation_figure(
             backtest_result.portfolio_returns,
@@ -1105,23 +1058,25 @@ def _build_figures(
             periods_per_year=periods_per_year,
         )
         figures["rolling_correlation"].update_layout(
-            title=f"Rolling Correlation To Benchmark ({rolling_window} periods) Unavailable"
+            title_text=f"Rolling correlation to benchmark ({rolling_window} periods) unavailable"
         )
     if metadata is not None:
         metadata_by_ticker = metadata.copy()
         if "ticker" in metadata_by_ticker.columns:
             metadata_by_ticker = metadata_by_ticker.set_index("ticker")
         aligned_metadata = metadata_by_ticker.reindex(backtest_result.weights.columns)
-        figures["asset_class_exposure"] = build_group_exposure_pie_figure(
+        figures["asset_class_exposure"] = build_group_exposure_figure(
             backtest_result.weights,
             aligned_metadata["asset_class"],
-            title="Portfolio Weights By Asset Class",
+            title="Portfolio weights by asset class",
+            subtitle="Share of the latest portfolio in each asset class",
         )
         if "region" in aligned_metadata.columns:
-            figures["region_exposure"] = build_group_exposure_pie_figure(
+            figures["region_exposure"] = build_group_exposure_figure(
                 backtest_result.weights,
                 aligned_metadata["region"],
-                title="Portfolio Weights By Region",
+                title="Portfolio weights by region",
+                subtitle="Share of the latest portfolio in each region",
             )
         if "expense_ratio" in aligned_metadata.columns:
             figures["weighted_expense_over_time"] = build_weighted_expense_ratio_over_time_figure(
@@ -1130,7 +1085,7 @@ def _build_figures(
             )
     else:
         figures["asset_class_exposure"] = build_weights_figure(backtest_result.weights)
-        figures["asset_class_exposure"].update_layout(title="Asset-Class Exposure Unavailable")
+        figures["asset_class_exposure"].update_layout(title_text="Asset-class exposure unavailable")
     figures["stress_periods"] = build_stress_period_figure(
         backtest_result.portfolio_returns,
         benchmark_returns=benchmark_returns,
@@ -1274,7 +1229,14 @@ def _write_figure_exports(
         path = output_root / f"{name}.png"
         try:
             with atomic_path(path) as temp_path:
-                write_image(figure, str(temp_path), format="png", width=1400, height=840, scale=2)
+                write_image(
+                    figure,
+                    str(temp_path),
+                    format="png",
+                    width=FIGURE_EXPORT_WIDTH,
+                    height=FIGURE_EXPORT_HEIGHT,
+                    scale=FIGURE_EXPORT_SCALE,
+                )
         except Exception as exc:
             atomic_write_bytes(path, PLACEHOLDER_PNG)
             log_event(
@@ -1288,57 +1250,6 @@ def _write_figure_exports(
         paths[name] = path
 
     return paths
-
-
-def _table_html(table: pd.DataFrame) -> str:
-    return table.to_html(index=False, border=0, na_rep="")
-
-
-def _figure_html(figure: Figure) -> str:
-    return (
-        '<div class="figure-block">'
-        f"{to_html(figure, full_html=False, include_plotlyjs=False)}"
-        "</div>"
-    )
-
-
-def _combine_blocks(blocks: list[str]) -> str:
-    cards = "".join(
-        f'<div class="card"><div class="card-inner">{block}</div></div>'
-        for block in blocks
-        if block
-    )
-    return f'<div class="grid">{cards}</div>'
-
-
-def _bullet_list_html(items: Any) -> str:
-    lines = "".join(f"<li>{html.escape(str(item))}</li>" for item in items if str(item).strip())
-    return f"<ul>{lines}</ul>"
-
-
-def _section_explanation_html(section_title: str) -> str:
-    explanations = SECTION_EXPLANATIONS.get(section_title)
-    if explanations is None:
-        return ""
-    explanation_rows = "".join(
-        f"<p><strong>{html.escape(label)}:</strong> {html.escape(description)}</p>"
-        for label, description in explanations
-    )
-    return (
-        '<div class="section-explanation">'
-        '<p class="eyebrow">How to read this section</p>'
-        f"{explanation_rows}"
-        "</div>"
-    )
-
-
-def _render_section(section_title: str, content: str) -> str:
-    return (
-        '<section class="card">'
-        f'<div class="card-inner"><h2>{html.escape(section_title)}</h2>'
-        f"{_section_explanation_html(section_title)}{content}</div>"
-        "</section>"
-    )
 
 
 _DEFAULT_ASSUMPTIONS: tuple[tuple[str, str], ...] = (
@@ -1400,10 +1311,10 @@ def _build_assumptions_appendix(
     max_weight: float,
     assumptions: dict[str, Any] | None,
     limitations: list[str] | None,
-) -> str:
+) -> tuple[Block, ...]:
     """Build the mandatory assumptions, parameters, and limitations appendix."""
 
-    blocks: list[str] = []
+    blocks: list[Block] = []
 
     config_rows = [
         {"parameter": "periods_per_year", "value": str(periods_per_year)},
@@ -1424,7 +1335,7 @@ def _build_assumptions_appendix(
                 },
             ]
         )
-    blocks.append(_table_html(pd.DataFrame(config_rows)))
+    blocks.append(_table(pd.DataFrame(config_rows)))
 
     merged_assumptions: dict[str, str] = dict(_DEFAULT_ASSUMPTIONS)
     for key, value in (assumptions or {}).items():
@@ -1432,7 +1343,7 @@ def _build_assumptions_appendix(
     assumption_table = pd.DataFrame(
         [{"key": key, "assumption": value} for key, value in merged_assumptions.items()]
     )
-    blocks.append(_table_html(assumption_table))
+    blocks.append(_table(assumption_table))
 
     if metadata is not None:
         profile = build_portfolio_profile_table(
@@ -1441,7 +1352,7 @@ def _build_assumptions_appendix(
             metadata=metadata,
             benchmark_returns=primary_benchmark_returns,
         )
-        blocks.append(_table_html(profile))
+        blocks.append(_table(profile))
 
     standard_limitations = [
         RESEARCH_TOOL_DISCLAIMER,
@@ -1453,9 +1364,9 @@ def _build_assumptions_appendix(
     realized_warning = _realized_constraint_warning_message(backtest_result)
     if realized_warning is not None:
         combined_limitations.append(realized_warning)
-    blocks.append(_bullet_list_html(combined_limitations))
+    blocks.append(ListBlock(tuple(str(item) for item in combined_limitations)))
 
-    return _combine_blocks(blocks)
+    return tuple(blocks)
 
 
 def _assumptions_appendix_table(

@@ -60,7 +60,7 @@ The active optimizer objective is `optimization.active_objective`; it is used by
 - `src/etf_portfolio/optimization/`: objectives (Sharpe, variance, etc.), constraints (asset class, ticker bounds), efficient frontier, and the SLSQP optimizer integration.
 - `src/etf_portfolio/backtesting/`: walk-forward engine, contribution-only rebalancing, transaction costs, and portfolio metrics.
 - `src/etf_portfolio/risk/`: exposure analysis, drawdown, stress testing, and risk attribution.
-- `src/etf_portfolio/reporting/`: Plotly figures, Excel tables, HTML report generation, and the report-bundle utility.
+- `src/etf_portfolio/reporting/`: Plotly figures, Excel tables, HTML report generation, and the report-bundle utility. Presentation is separated from numbers: `plots.py` has `build_*` functions that compute series and `render_*` functions that own the look (palette, type, axes, hover); `layout.py` owns the page (a research-note layout of numbered sections, captioned figures, and ruled tables); `report.py` assembles the content. See [How To Read The Report](how_to_read_the_report.md) for the design.
 - `src/etf_portfolio/ml/`: experimental ML dataset creation, training, evaluation, registry, and governance gates.
 - `src/etf_portfolio/pipeline/`: the resumable stage runner, pipeline state manifest, and console progress/summary.
 - `src/etf_portfolio/tracking.py`: utility for run-record persistence and artifact hashing.

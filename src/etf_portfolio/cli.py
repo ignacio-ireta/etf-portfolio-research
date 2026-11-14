@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from plotly.io import write_html
 
 from etf_portfolio import __version__
 from etf_portfolio.backtesting.engine import run_walk_forward_backtest
@@ -56,7 +55,7 @@ from etf_portfolio.ml.train import (
 from etf_portfolio.optimization.optimizer import OptimizationMethod, optimize_portfolio
 from etf_portfolio.pipeline.runner import Stage, run_pipeline
 from etf_portfolio.reporting.plots import build_efficient_frontier_figure
-from etf_portfolio.reporting.report import generate_report_bundle
+from etf_portfolio.reporting.report import generate_report_bundle, write_frontier_page
 from etf_portfolio.reporting.tables import build_metrics_table
 from etf_portfolio.tracking import (
     OUTPUT_SCHEMA_VERSION,
@@ -388,20 +387,19 @@ def run_optimize(
         covariance_matrix.to_excel(writer, sheet_name="covariance")
 
     frontier_path = project_root / "reports/html/frontier.html"
-    with atomic_path(frontier_path) as frontier_temp:
-        write_html(
-            build_efficient_frontier_figure(
-                expected_returns,
-                covariance_matrix,
-                portfolio_weights=weights,
-                max_weight=config.optimization.default_max_weight_per_etf,
-                risk_free_rate=get_risk_free_rate(config),
-                **optimization_constraints,
-            ),
-            file=str(frontier_temp),
-            full_html=True,
-            include_plotlyjs="inline",
-        )
+    write_frontier_page(
+        build_efficient_frontier_figure(
+            expected_returns,
+            covariance_matrix,
+            portfolio_weights=weights,
+            max_weight=config.optimization.default_max_weight_per_etf,
+            risk_free_rate=get_risk_free_rate(config),
+            **optimization_constraints,
+        ),
+        frontier_path,
+        tickers=[str(ticker) for ticker in asset_returns.columns],
+        run_id=stage_run_id,
+    )
     portfolio_return = float(weights.dot(expected_returns))
     portfolio_volatility = float((weights.T @ covariance_matrix @ weights) ** 0.5)
     portfolio_sharpe = calculate_sharpe_ratio(
@@ -600,6 +598,7 @@ def run_backtest(
         bond_assets=bond_assets,
         min_bond_exposure=optimization_constraints["min_bond_exposure"],
         expense_ratios=expense_ratio_map,
+        run_id=stage_run_id,
     )
     legacy_report_path = project_root / "reports/html/backtest_report.html"
     atomic_write_text(

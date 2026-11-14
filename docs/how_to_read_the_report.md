@@ -289,3 +289,30 @@ The report states this in three places:
 How to read them together: if **Optimized Strategy** beats **Optimizer Target (Full
 Rebalance)**, the result came from *not* following the optimizer (drift), not from the
 optimizer's choices. Do not credit the optimizer for it.
+
+## Statistical uncertainty: is the Sharpe difference real?
+
+A Sharpe ratio measured on about ten years of daily returns is a noisy number. Two
+portfolios whose true Sharpe ratios are equal will routinely show a difference of 0.1 or
+0.2 by luck alone.
+
+Every backtest therefore reports, for each benchmark, a 95% confidence interval for
+`Sharpe(Optimized Strategy) - Sharpe(benchmark)`:
+
+- The assumption line that starts with `Statistical uncertainty:` gives the interval versus
+  the primary benchmark.
+- `reports/metrics/backtest_metrics.json` gives it for every benchmark under
+  `sharpe_difference_vs_benchmarks`.
+
+How to read it:
+
+- **The interval contains zero** (for example `[-0.10, +0.30]`): the data cannot tell the two
+  Sharpe ratios apart. Do not say the strategy "beat" that benchmark on a risk-adjusted basis.
+- **The interval excludes zero** (for example `[+0.05, +0.31]`): the difference is unlikely to
+  be sampling noise alone. This still says nothing about the future, about costs that are
+  not modeled, or about how many configurations were tried before this one.
+
+Method: stationary block bootstrap, 1000 resamples, mean block length 21 trading days,
+fixed seed 0 (results are reproducible). Both series are resampled with the same blocks.
+`probability_not_positive` is the share of resamples in which the difference was zero or
+negative.

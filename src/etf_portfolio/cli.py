@@ -16,6 +16,7 @@ from etf_portfolio.backtesting.metrics import (
     calculate_sharpe_ratio,
     summarize_implementation_gap,
 )
+from etf_portfolio.backtesting.uncertainty import bootstrap_sharpe_difference
 from etf_portfolio.config import AppConfig, OptimizationObjective, load_config
 from etf_portfolio.data.ingest import ingest_price_data, load_etf_universe_metadata
 from etf_portfolio.data.providers import (
@@ -622,6 +623,15 @@ def run_backtest(
         }
     )
     primary_benchmark = aligned_benchmark_suite.get("Selected Benchmark ETF", aligned_benchmark)
+    sharpe_uncertainty = {
+        name: bootstrap_sharpe_difference(
+            aligned_portfolio,
+            series,
+            risk_free_rate=risk_free_rate,
+            periods_per_year=252,
+        )
+        for name, series in aligned_benchmark_suite.items()
+    }
 
     report_path = project_root / "reports/html/latest_report.html"
     workbook_path = project_root / "reports/excel/portfolio_results.xlsx"
@@ -654,6 +664,7 @@ def run_backtest(
             lookback_periods=effective_lookback,
             effective_start_date=effective_start_date,
             implementation_gap=gap_summary,
+            sharpe_uncertainty=sharpe_uncertainty.get("Selected Benchmark ETF"),
         ),
         limitations=_report_limitations(config),
         asset_returns=asset_returns,
@@ -693,6 +704,7 @@ def run_backtest(
         "optimized_strategy": strategy_metrics_payload,
         "benchmarks": metrics_by_strategy,
         "implementation_gap": gap_summary,
+        "sharpe_difference_vs_benchmarks": sharpe_uncertainty,
     }
     if tracking_provenance is not None:
         metrics_payload["provenance_status"] = tracking_provenance["provenance_status"]
@@ -1294,6 +1306,7 @@ def _report_assumptions(
     lookback_periods: int | None = None,
     effective_start_date: pd.Timestamp | None = None,
     implementation_gap: dict[str, float | int] | None = None,
+    sharpe_uncertainty: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     assumptions = {
         "data_provider": f"Data provider: {config.data.provider}",
@@ -1368,6 +1381,30 @@ def _report_assumptions(
                 "same optimizer followed exactly."
             )
         assumptions["implementation_gap"] = gap_text
+    if (
+        sharpe_uncertainty is not None
+        and sharpe_uncertainty.get("sharpe_difference") is not None
+        and sharpe_uncertainty.get("ci_lower") is not None
+        and sharpe_uncertainty.get("ci_upper") is not None
+    ):
+        ci_lower = float(sharpe_uncertainty["ci_lower"])
+        ci_upper = float(sharpe_uncertainty["ci_upper"])
+        verdict = (
+            "The interval contains zero: this sample cannot distinguish the two Sharpe ratios."
+            if ci_lower <= 0.0 <= ci_upper
+            else "The interval excludes zero: the difference is unlikely to be sampling "
+            "noise alone, which is still not evidence about the future."
+        )
+        assumptions["statistical_uncertainty"] = (
+            "Statistical uncertainty: Sharpe ratio of the strategy minus Sharpe ratio of "
+            f"the primary benchmark ({config.benchmark.primary}) is "
+            f"{float(sharpe_uncertainty['sharpe_difference']):+.2f}, with a "
+            f"{float(sharpe_uncertainty['confidence_level']):.0%} bootstrap interval of "
+            f"[{ci_lower:+.2f}, {ci_upper:+.2f}] "
+            f"({int(sharpe_uncertainty['n_resamples'])} stationary-bootstrap resamples, "
+            f"mean block {int(sharpe_uncertainty['mean_block_length'])} trading days, "
+            f"{int(sharpe_uncertainty['n_observations'])} daily observations). {verdict}"
+        )
     if run_id is not None:
         assumptions["run_id"] = f"Run ID: {run_id}"
     return assumptions

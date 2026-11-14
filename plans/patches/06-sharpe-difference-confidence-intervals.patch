@@ -1,0 +1,443 @@
+diff --git a/README.md b/README.md
+index dccf932..b0f375f 100644
+--- a/README.md
++++ b/README.md
+@@ -173,6 +173,7 @@ The HTML report is generated from pipeline outputs, not notebook state.
+ - The selected benchmark ETF is a single-fund buy-and-hold return series. Configured secondary allocation benchmarks (for example 60/40) drift between rebalance dates, are reset to their fixed weights on the same rebalance dates as the strategy, and pay the same transaction cost/slippage rate on the traded weight. They do not model contributions, and no initial purchase cost is charged to them.
+ - The report frontier uses the same constraint bundle as optimization and walk-forward backtesting: asset classes, asset-class bounds, ticker bounds, bond floor, and expense-ratio inputs are passed through consistently.
+ - `Optimized Strategy` is the realized portfolio under `rebalance.mode`, not the optimizer target. Each run reports the implementation gap (average and maximum one-way distance between realized and target weights, and how many rebalances broke a configured constraint) in the report assumptions and in `reports/metrics/backtest_metrics.json` under `implementation_gap`. When the mode is not `full_rebalance`, the benchmark row `Optimizer Target (Full Rebalance)` shows the same optimizer followed exactly.
++- Every Sharpe comparison comes with a 95% stationary-bootstrap confidence interval for the Sharpe difference (report assumption line `Statistical uncertainty:`; all benchmarks in `reports/metrics/backtest_metrics.json` under `sharpe_difference_vs_benchmarks`). If the interval contains zero, the sample cannot distinguish the two portfolios.
+ - Backtest reporting separates optimizer targets from realized holdings. The Excel bundle includes `optimizer_target_portfolio` and `latest_realized_portfolio`, plus realized-constraint warnings when contribution-only drift breaches configured caps.
+ - Transaction costs and slippage are modeled, but execution is still simplified relative to live trading.
+ - Reporting is code-generated; notebooks are research interfaces only.
+diff --git a/docs/how_to_read_the_report.md b/docs/how_to_read_the_report.md
+index f68dbb6..d691c5c 100644
+--- a/docs/how_to_read_the_report.md
++++ b/docs/how_to_read_the_report.md
+@@ -277,3 +277,30 @@ The report states this in three places:
+ How to read them together: if **Optimized Strategy** beats **Optimizer Target (Full
+ Rebalance)**, the result came from *not* following the optimizer (drift), not from the
+ optimizer's choices. Do not credit the optimizer for it.
++
++## Statistical uncertainty: is the Sharpe difference real?
++
++A Sharpe ratio measured on about ten years of daily returns is a noisy number. Two
++portfolios whose true Sharpe ratios are equal will routinely show a difference of 0.1 or
++0.2 by luck alone.
++
++Every backtest therefore reports, for each benchmark, a 95% confidence interval for
++`Sharpe(Optimized Strategy) - Sharpe(benchmark)`:
++
++- The assumption line that starts with `Statistical uncertainty:` gives the interval versus
++  the primary benchmark.
++- `reports/metrics/backtest_metrics.json` gives it for every benchmark under
++  `sharpe_difference_vs_benchmarks`.
++
++How to read it:
++
++- **The interval contains zero** (for example `[-0.10, +0.30]`): the data cannot tell the two
++  Sharpe ratios apart. Do not say the strategy "beat" that benchmark on a risk-adjusted basis.
++- **The interval excludes zero** (for example `[+0.05, +0.31]`): the difference is unlikely to
++  be sampling noise alone. This still says nothing about the future, about costs that are
++  not modeled, or about how many configurations were tried before this one.
++
++Method: stationary block bootstrap, 1000 resamples, mean block length 21 trading days,
++fixed seed 0 (results are reproducible). Both series are resampled with the same blocks.
++`probability_not_positive` is the share of resamples in which the difference was zero or
++negative.
+diff --git a/docs/output_contract.md b/docs/output_contract.md
+index d9482f1..c37646f 100644
+--- a/docs/output_contract.md
++++ b/docs/output_contract.md
+@@ -16,7 +16,7 @@ in `CHANGELOG.md`. The constant lives at
+ 
+ | Artifact | Path | Description |
+ | --- | --- | --- |
+-| Backtest metrics | `reports/metrics/backtest_metrics.json` | `schema_version`, `run_id`, `provenance_status`, `optimized_strategy` (metric → value), `benchmarks` (name → metrics), `implementation_gap` (`rebalance_count`, `mean_one_way_gap`, `max_one_way_gap`, `latest_one_way_gap`, `rebalances_with_constraint_violation`), `run_record` (relative path) |
++| Backtest metrics | `reports/metrics/backtest_metrics.json` | `schema_version`, `run_id`, `provenance_status`, `optimized_strategy` (metric → value), `benchmarks` (name → metrics), `implementation_gap` (`rebalance_count`, `mean_one_way_gap`, `max_one_way_gap`, `latest_one_way_gap`, `rebalances_with_constraint_violation`), `sharpe_difference_vs_benchmarks` (benchmark name → `sharpe_difference`, `ci_lower`, `ci_upper`, `probability_not_positive`, `confidence_level`, `n_observations`, `n_resamples`, `mean_block_length`, `seed`), `run_record` (relative path) |
+ | Validation summary | `reports/metrics/validation_summary.json` | `schema_version`, `missing_data_fraction`, `history_coverage`, `suspicious_jump_count` |
+ | Run record | `reports/runs/<stage>_<run_id>.json` | `schema_version`, `pipeline_steps`, `git_commit_hash`, `config_hash`, `universe_id`, `data_version`, `output_artifacts` (name → {path, exists, sha256}), method metadata; backtest records also carry `lookback_periods` (observations actually used), `configured_lookback_periods`, and `configured_backtest_start_date` |
+ | Pipeline state | `reports/runs/pipeline_state.json` | Per-stage `status`, `input_hash`, `outputs` (path → sha256), timestamps; drives `--resume` |
+diff --git a/src/etf_portfolio/backtesting/uncertainty.py b/src/etf_portfolio/backtesting/uncertainty.py
+new file mode 100644
+index 0000000..0343e77
+--- /dev/null
++++ b/src/etf_portfolio/backtesting/uncertainty.py
+@@ -0,0 +1,122 @@
++"""Sampling uncertainty for backtest comparisons.
++
++A Sharpe ratio measured on roughly a decade of daily returns is a noisy estimate.
++This module puts a confidence interval around the *difference* between two Sharpe
++ratios with a stationary block bootstrap (Politis and Romano, 1994): both return
++series are resampled with the same randomly chosen blocks of consecutive days, so
++day-to-day autocorrelation and the correlation between the two series are kept.
++"""
++
++from __future__ import annotations
++
++from typing import Any
++
++import numpy as np
++import pandas as pd
++
++DEFAULT_BOOTSTRAP_RESAMPLES = 1000
++DEFAULT_MEAN_BLOCK_LENGTH = 21
++DEFAULT_CONFIDENCE_LEVEL = 0.95
++DEFAULT_BOOTSTRAP_SEED = 0
++MINIMUM_BOOTSTRAP_OBSERVATIONS = 3
++
++
++def bootstrap_sharpe_difference(
++    returns: pd.Series,
++    benchmark_returns: pd.Series,
++    *,
++    risk_free_rate: float = 0.0,
++    periods_per_year: int = 252,
++    n_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
++    mean_block_length: int = DEFAULT_MEAN_BLOCK_LENGTH,
++    confidence_level: float = DEFAULT_CONFIDENCE_LEVEL,
++    seed: int = DEFAULT_BOOTSTRAP_SEED,
++) -> dict[str, Any]:
++    """Bootstrap the annualized Sharpe ratio of `returns` minus that of `benchmark_returns`.
++
++    Returns a JSON-friendly dictionary. When fewer than three common observations
++    exist, or either series has zero volatility, the numeric results are ``None``.
++    """
++
++    if periods_per_year <= 0:
++        raise ValueError("periods_per_year must be positive.")
++    if n_resamples <= 0:
++        raise ValueError("n_resamples must be positive.")
++    if mean_block_length <= 0:
++        raise ValueError("mean_block_length must be positive.")
++    if not 0.0 < confidence_level < 1.0:
++        raise ValueError("confidence_level must be strictly between 0 and 1.")
++
++    paired = pd.concat([returns, benchmark_returns], axis=1, join="inner").dropna()
++    observation_count = len(paired)
++    summary: dict[str, Any] = {
++        "sharpe_difference": None,
++        "ci_lower": None,
++        "ci_upper": None,
++        "probability_not_positive": None,
++        "confidence_level": float(confidence_level),
++        "n_observations": observation_count,
++        "n_resamples": int(n_resamples),
++        "mean_block_length": int(mean_block_length),
++        "seed": int(seed),
++    }
++    if observation_count < MINIMUM_BOOTSTRAP_OBSERVATIONS:
++        return summary
++
++    strategy = paired.iloc[:, 0].to_numpy(dtype=float)
++    benchmark = paired.iloc[:, 1].to_numpy(dtype=float)
++    daily_risk_free = risk_free_rate / periods_per_year
++    annualizer = float(np.sqrt(periods_per_year))
++
++    strategy_volatility = float(strategy.std(ddof=1))
++    benchmark_volatility = float(benchmark.std(ddof=1))
++    if np.isclose(strategy_volatility, 0.0) or np.isclose(benchmark_volatility, 0.0):
++        return summary
++
++    point_estimate = (
++        (strategy.mean() - daily_risk_free) / strategy_volatility
++        - (benchmark.mean() - daily_risk_free) / benchmark_volatility
++    ) * annualizer
++
++    # Stationary bootstrap indices: each position either continues the current block
++    # (previous index + 1, wrapping around) or jumps to a fresh random start.
++    rng = np.random.default_rng(seed)
++    positions = np.arange(observation_count)
++    jumps = rng.random((n_resamples, observation_count)) < 1.0 / mean_block_length
++    jumps[:, 0] = True
++    fresh_starts = rng.integers(0, observation_count, size=(n_resamples, observation_count))
++    last_jump = np.maximum.accumulate(np.where(jumps, positions, 0), axis=1)
++    block_starts = np.take_along_axis(fresh_starts, last_jump, axis=1)
++    indices = (block_starts + positions - last_jump) % observation_count
++
++    strategy_samples = strategy[indices]
++    benchmark_samples = benchmark[indices]
++    with np.errstate(divide="ignore", invalid="ignore"):
++        differences = (
++            (strategy_samples.mean(axis=1) - daily_risk_free) / strategy_samples.std(axis=1, ddof=1)
++            - (benchmark_samples.mean(axis=1) - daily_risk_free)
++            / benchmark_samples.std(axis=1, ddof=1)
++        ) * annualizer
++    differences = differences[np.isfinite(differences)]
++    if differences.size == 0:
++        return summary
++
++    tail = (1.0 - confidence_level) / 2.0
++    summary.update(
++        {
++            "sharpe_difference": float(point_estimate),
++            "ci_lower": float(np.quantile(differences, tail)),
++            "ci_upper": float(np.quantile(differences, 1.0 - tail)),
++            "probability_not_positive": float(np.mean(differences <= 0.0)),
++        }
++    )
++    return summary
++
++
++__all__ = [
++    "DEFAULT_BOOTSTRAP_RESAMPLES",
++    "DEFAULT_BOOTSTRAP_SEED",
++    "DEFAULT_CONFIDENCE_LEVEL",
++    "DEFAULT_MEAN_BLOCK_LENGTH",
++    "bootstrap_sharpe_difference",
++]
+diff --git a/src/etf_portfolio/cli.py b/src/etf_portfolio/cli.py
+index 29de65b..d4c4086 100644
+--- a/src/etf_portfolio/cli.py
++++ b/src/etf_portfolio/cli.py
+@@ -17,6 +17,7 @@ from etf_portfolio.backtesting.metrics import (
+     calculate_sharpe_ratio,
+     summarize_implementation_gap,
+ )
++from etf_portfolio.backtesting.uncertainty import bootstrap_sharpe_difference
+ from etf_portfolio.config import AppConfig, OptimizationObjective, load_config
+ from etf_portfolio.data.ingest import ingest_price_data, load_etf_universe_metadata
+ from etf_portfolio.data.providers import (
+@@ -624,6 +625,15 @@ def run_backtest(
+         }
+     )
+     primary_benchmark = aligned_benchmark_suite.get("Selected Benchmark ETF", aligned_benchmark)
++    sharpe_uncertainty = {
++        name: bootstrap_sharpe_difference(
++            aligned_portfolio,
++            series,
++            risk_free_rate=risk_free_rate,
++            periods_per_year=252,
++        )
++        for name, series in aligned_benchmark_suite.items()
++    }
+ 
+     report_path = project_root / "reports/html/latest_report.html"
+     workbook_path = project_root / "reports/excel/portfolio_results.xlsx"
+@@ -656,6 +666,7 @@ def run_backtest(
+             lookback_periods=effective_lookback,
+             effective_start_date=effective_start_date,
+             implementation_gap=gap_summary,
++            sharpe_uncertainty=sharpe_uncertainty.get("Selected Benchmark ETF"),
+         ),
+         limitations=_report_limitations(config),
+         asset_returns=asset_returns,
+@@ -694,6 +705,7 @@ def run_backtest(
+         "optimized_strategy": strategy_metrics_payload,
+         "benchmarks": metrics_by_strategy,
+         "implementation_gap": gap_summary,
++        "sharpe_difference_vs_benchmarks": sharpe_uncertainty,
+     }
+     if tracking_provenance is not None:
+         metrics_payload["provenance_status"] = tracking_provenance["provenance_status"]
+@@ -1295,6 +1307,7 @@ def _report_assumptions(
+     lookback_periods: int | None = None,
+     effective_start_date: pd.Timestamp | None = None,
+     implementation_gap: dict[str, float | int] | None = None,
++    sharpe_uncertainty: dict[str, Any] | None = None,
+ ) -> dict[str, str]:
+     assumptions = {
+         "data_provider": f"Data provider: {config.data.provider}",
+@@ -1369,6 +1382,30 @@ def _report_assumptions(
+                 "same optimizer followed exactly."
+             )
+         assumptions["implementation_gap"] = gap_text
++    if (
++        sharpe_uncertainty is not None
++        and sharpe_uncertainty.get("sharpe_difference") is not None
++        and sharpe_uncertainty.get("ci_lower") is not None
++        and sharpe_uncertainty.get("ci_upper") is not None
++    ):
++        ci_lower = float(sharpe_uncertainty["ci_lower"])
++        ci_upper = float(sharpe_uncertainty["ci_upper"])
++        verdict = (
++            "The interval contains zero: this sample cannot distinguish the two Sharpe ratios."
++            if ci_lower <= 0.0 <= ci_upper
++            else "The interval excludes zero: the difference is unlikely to be sampling "
++            "noise alone, which is still not evidence about the future."
++        )
++        assumptions["statistical_uncertainty"] = (
++            "Statistical uncertainty: Sharpe ratio of the strategy minus Sharpe ratio of "
++            f"the primary benchmark ({config.benchmark.primary}) is "
++            f"{float(sharpe_uncertainty['sharpe_difference']):+.2f}, with a "
++            f"{float(sharpe_uncertainty['confidence_level']):.0%} bootstrap interval of "
++            f"[{ci_lower:+.2f}, {ci_upper:+.2f}] "
++            f"({int(sharpe_uncertainty['n_resamples'])} stationary-bootstrap resamples, "
++            f"mean block {int(sharpe_uncertainty['mean_block_length'])} trading days, "
++            f"{int(sharpe_uncertainty['n_observations'])} daily observations). {verdict}"
++        )
+     if run_id is not None:
+         assumptions["run_id"] = f"Run ID: {run_id}"
+     return assumptions
+diff --git a/tests/unit/test_sharpe_uncertainty.py b/tests/unit/test_sharpe_uncertainty.py
+new file mode 100644
+index 0000000..aad5cc2
+--- /dev/null
++++ b/tests/unit/test_sharpe_uncertainty.py
+@@ -0,0 +1,166 @@
++"""Tests for the bootstrap confidence interval on Sharpe-ratio differences."""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++import numpy as np
++import pandas as pd
++import pytest
++
++from etf_portfolio import cli
++from etf_portfolio.backtesting.uncertainty import bootstrap_sharpe_difference
++from etf_portfolio.config import load_config
++
++
++def _noise(seed: int, periods: int = 500) -> pd.Series:
++    rng = np.random.default_rng(seed)
++    index = pd.bdate_range("2018-01-01", periods=periods)
++    return pd.Series(rng.normal(loc=0.0004, scale=0.01, size=periods), index=index)
++
++
++def test_result_is_deterministic_for_a_fixed_seed() -> None:
++    first = bootstrap_sharpe_difference(_noise(1), _noise(2), seed=7)
++    second = bootstrap_sharpe_difference(_noise(1), _noise(2), seed=7)
++    other_seed = bootstrap_sharpe_difference(_noise(1), _noise(2), seed=8)
++
++    assert first == second
++    assert first["ci_lower"] != other_seed["ci_lower"]
++
++
++def test_identical_series_have_zero_difference() -> None:
++    series = _noise(3)
++
++    result = bootstrap_sharpe_difference(series, series)
++
++    assert result["sharpe_difference"] == pytest.approx(0.0)
++    assert result["ci_lower"] == pytest.approx(0.0)
++    assert result["ci_upper"] == pytest.approx(0.0)
++    assert result["probability_not_positive"] == pytest.approx(1.0)
++
++
++def test_a_constant_daily_edge_gives_an_interval_above_zero() -> None:
++    benchmark = _noise(4)
++    strategy = benchmark + 0.001
++
++    result = bootstrap_sharpe_difference(strategy, benchmark)
++
++    assert result["sharpe_difference"] > 0.0
++    assert result["ci_lower"] > 0.0
++    assert result["probability_not_positive"] == pytest.approx(0.0)
++
++
++def test_two_unrelated_noise_series_give_an_interval_that_contains_zero() -> None:
++    result = bootstrap_sharpe_difference(_noise(5), _noise(6))
++
++    assert result["ci_lower"] < 0.0 < result["ci_upper"]
++    assert result["n_observations"] == 500
++    assert result["n_resamples"] == 1000
++    assert result["mean_block_length"] == 21
++    assert result["confidence_level"] == pytest.approx(0.95)
++
++
++def test_point_estimate_matches_the_metrics_module() -> None:
++    from etf_portfolio.backtesting.metrics import sharpe_ratio
++
++    strategy, benchmark = _noise(9), _noise(10)
++
++    result = bootstrap_sharpe_difference(strategy, benchmark, risk_free_rate=0.03)
++
++    expected = sharpe_ratio(strategy, risk_free_rate=0.03) - sharpe_ratio(
++        benchmark, risk_free_rate=0.03
++    )
++    assert result["sharpe_difference"] == pytest.approx(expected)
++
++
++def test_too_few_observations_return_none_results() -> None:
++    index = pd.bdate_range("2021-01-04", periods=2)
++    short = pd.Series([0.01, -0.01], index=index)
++
++    result = bootstrap_sharpe_difference(short, short)
++
++    assert result["sharpe_difference"] is None
++    assert result["ci_lower"] is None
++    assert result["ci_upper"] is None
++    assert result["n_observations"] == 2
++
++
++def test_missing_values_are_dropped_pairwise() -> None:
++    strategy = _noise(11)
++    benchmark = _noise(12)
++    benchmark.iloc[:100] = np.nan
++
++    result = bootstrap_sharpe_difference(strategy, benchmark)
++
++    assert result["n_observations"] == 400
++
++
++def test_invalid_arguments_are_rejected() -> None:
++    series = _noise(13)
++    with pytest.raises(ValueError, match="n_resamples"):
++        bootstrap_sharpe_difference(series, series, n_resamples=0)
++    with pytest.raises(ValueError, match="confidence_level"):
++        bootstrap_sharpe_difference(series, series, confidence_level=1.0)
++
++
++def test_backtest_writes_sharpe_uncertainty_for_every_benchmark(
++    tiny_project: Path, synthetic_prices: pd.DataFrame
++) -> None:
++    processed = tiny_project / "data/processed"
++    processed.mkdir(parents=True, exist_ok=True)
++    synthetic_prices.to_parquet(processed / "prices_validated.parquet")
++    synthetic_prices.pct_change(fill_method=None).dropna().to_parquet(processed / "returns.parquet")
++
++    cli.run_backtest("configs/base.yaml", project_root=tiny_project, lookback_periods=5)
++
++    metrics = json.loads(
++        (tiny_project / "reports/metrics/backtest_metrics.json").read_text(encoding="utf-8")
++    )
++    uncertainty = metrics["sharpe_difference_vs_benchmarks"]
++    assert set(uncertainty) == set(metrics["benchmarks"])
++    primary = uncertainty["Selected Benchmark ETF"]
++    assert primary["ci_lower"] <= primary["sharpe_difference"] <= primary["ci_upper"]
++
++    report_html = (tiny_project / "reports/html/latest_report.html").read_text(encoding="utf-8")
++    assert "Statistical uncertainty:" in report_html
++
++
++def test_assumption_line_says_when_the_interval_contains_zero(tiny_project: Path) -> None:
++    config = load_config(tiny_project / "configs/base.yaml")
++    base = {
++        "confidence_level": 0.95,
++        "n_observations": 2800,
++        "n_resamples": 1000,
++        "mean_block_length": 21,
++        "seed": 0,
++        "probability_not_positive": 0.17,
++    }
++
++    inconclusive = cli._report_assumptions(
++        config,
++        "max_sharpe",
++        sharpe_uncertainty={**base, "sharpe_difference": 0.10, "ci_lower": -0.10, "ci_upper": 0.30},
++    )["statistical_uncertainty"]
++    conclusive = cli._report_assumptions(
++        config,
++        "max_sharpe",
++        sharpe_uncertainty={**base, "sharpe_difference": 0.40, "ci_lower": 0.10, "ci_upper": 0.70},
++    )["statistical_uncertainty"]
++
++    assert inconclusive.startswith("Statistical uncertainty:")
++    assert "[-0.10, +0.30]" in inconclusive
++    assert "contains zero" in inconclusive
++    assert "excludes zero" in conclusive
++
++
++def test_assumption_line_is_omitted_without_a_usable_interval(tiny_project: Path) -> None:
++    config = load_config(tiny_project / "configs/base.yaml")
++
++    assumptions = cli._report_assumptions(
++        config,
++        "max_sharpe",
++        sharpe_uncertainty={"sharpe_difference": None, "ci_lower": None, "ci_upper": None},
++    )
++
++    assert "statistical_uncertainty" not in assumptions

@@ -1,0 +1,224 @@
+diff --git a/src/etf_portfolio/optimization/optimizer.py b/src/etf_portfolio/optimization/optimizer.py
+index 2120af2..b8eabc6 100644
+--- a/src/etf_portfolio/optimization/optimizer.py
++++ b/src/etf_portfolio/optimization/optimizer.py
+@@ -48,6 +48,11 @@ LOGGER = get_logger(__name__)
+ DEFAULT_SOLVER = "SLSQP"
+ COVARIANCE_SYMMETRY_TOLERANCE = 1e-10
+ COVARIANCE_PSD_TOLERANCE = 1e-10
++# SLSQP convergence tolerances, tried in order. The first entry is the strict default.
++# A later entry is used only when every start point failed at the previous one
++# (typically "Positive directional derivative for linesearch": the solver is at the
++# optimum but cannot certify it at the stricter tolerance).
++SOLVER_FTOL_LADDER = (1e-12, 1e-10, 1e-8, 1e-6)
+ 
+ 
+ def optimize_portfolio(
+@@ -186,7 +191,7 @@ def optimize_portfolio(
+         weight_sum=weight_sum,
+         linear_constraints=linear_constraints,
+     )
+-    result = _solve_with_retries(
++    result, ftol_used = _solve_with_retries(
+         objective=objective,
+         candidate_initial_weights=candidate_initial_weights,
+         bounds=bounds,
+@@ -211,6 +216,19 @@ def optimize_portfolio(
+         )
+         raise ValueError(f"Optimization failed: {result.message}")
+ 
++    if ftol_used != SOLVER_FTOL_LADDER[0]:
++        log_event(
++            LOGGER,
++            logging.WARNING,
++            "optimizer_tolerance_relaxed",
++            method=validated_method,
++            solver_used=DEFAULT_SOLVER,
++            optimizer_status="success",
++            strict_ftol=SOLVER_FTOL_LADDER[0],
++            ftol_used=ftol_used,
++            reason="SLSQP did not converge at the strict tolerance from any start point.",
++        )
++
+     weights = pd.Series(result.x, index=assets, dtype=float, name="weight")
+     weights[np.abs(weights) < 1e-10] = 0.0
+     _log_optimizer_completion(
+@@ -457,21 +475,30 @@ def _solve_with_retries(
+     candidate_initial_weights: Sequence[np.ndarray],
+     bounds: Any,
+     constraints: Sequence[dict[str, Any]],
+-) -> Any:
++) -> tuple[Any, float]:
++    """Solve from each start point, relaxing ftol only when every start point fails.
++
++    Returns `(result, ftol_used)`. A solve that succeeds at the strict tolerance is
++    returned unchanged, so relaxing never alters a result that already converged.
++    """
++
+     last_result: Any = None
+-    for candidate in candidate_initial_weights:
+-        result = minimize(
+-            objective,
+-            x0=candidate,
+-            method="SLSQP",
+-            bounds=bounds,
+-            constraints=constraints,
+-            options={"maxiter": 500, "ftol": 1e-12},
+-        )
+-        last_result = result
+-        if result.success:
+-            return result
+-    return last_result
++    last_ftol = SOLVER_FTOL_LADDER[0]
++    for ftol in SOLVER_FTOL_LADDER:
++        for candidate in candidate_initial_weights:
++            result = minimize(
++                objective,
++                x0=candidate,
++                method="SLSQP",
++                bounds=bounds,
++                constraints=constraints,
++                options={"maxiter": 500, "ftol": ftol},
++            )
++            last_result = result
++            last_ftol = ftol
++            if result.success:
++                return result, ftol
++    return last_result, last_ftol
+ 
+ 
+ def _validate_bound_feasibility(
+diff --git a/tests/unit/test_optimizer_solver_fallback.py b/tests/unit/test_optimizer_solver_fallback.py
+new file mode 100644
+index 0000000..64ee5c1
+--- /dev/null
++++ b/tests/unit/test_optimizer_solver_fallback.py
+@@ -0,0 +1,128 @@
++"""Tests for the SLSQP tolerance ladder used when the strict solve cannot converge."""
++
++from __future__ import annotations
++
++import logging
++from typing import Any
++
++import numpy as np
++import pandas as pd
++import pytest
++from scipy.optimize import OptimizeResult
++
++from etf_portfolio.optimization import optimizer as optimizer_module
++from etf_portfolio.optimization.optimizer import SOLVER_FTOL_LADDER, optimize_portfolio
++
++ASSETS = ["VTI", "BND", "IAU", "REMX"]
++
++
++def _expected_returns() -> pd.Series:
++    return pd.Series({"VTI": 0.10, "BND": 0.05, "IAU": 0.07, "REMX": 0.09})
++
++
++def _covariance_matrix() -> pd.DataFrame:
++    return pd.DataFrame(
++        [
++            [0.040, 0.004, 0.006, 0.012],
++            [0.004, 0.010, 0.002, 0.003],
++            [0.006, 0.002, 0.025, 0.005],
++            [0.012, 0.003, 0.005, 0.060],
++        ],
++        index=ASSETS,
++        columns=ASSETS,
++    )
++
++
++def _install_fake_minimize(
++    monkeypatch: pytest.MonkeyPatch,
++    *,
++    loosest_failing_ftol: float,
++) -> list[float]:
++    """Make every solve fail when ftol <= loosest_failing_ftol; record each ftol tried."""
++
++    real_minimize = optimizer_module.minimize
++    seen_ftols: list[float] = []
++
++    def fake_minimize(objective: Any, **kwargs: Any) -> Any:
++        ftol = float(kwargs["options"]["ftol"])
++        seen_ftols.append(ftol)
++        if ftol <= loosest_failing_ftol:
++            start = np.asarray(kwargs["x0"], dtype=float)
++            return OptimizeResult(
++                x=start,
++                success=False,
++                status=8,
++                message="Positive directional derivative for linesearch",
++                fun=float(objective(start)),
++            )
++        return real_minimize(objective, **kwargs)
++
++    monkeypatch.setattr(optimizer_module, "minimize", fake_minimize)
++    return seen_ftols
++
++
++def _events(caplog: pytest.LogCaptureFixture, name: str) -> list[logging.LogRecord]:
++    return [record for record in caplog.records if getattr(record, "event", "") == name]
++
++
++def test_ladder_starts_strict_and_is_sorted_from_strict_to_loose() -> None:
++    assert SOLVER_FTOL_LADDER[0] == 1e-12
++    assert list(SOLVER_FTOL_LADDER) == sorted(SOLVER_FTOL_LADDER)
++
++
++def test_strict_solve_success_does_not_relax_or_warn(
++    monkeypatch: pytest.MonkeyPatch,
++    caplog: pytest.LogCaptureFixture,
++) -> None:
++    seen_ftols = _install_fake_minimize(monkeypatch, loosest_failing_ftol=0.0)
++
++    with caplog.at_level(logging.WARNING):
++        weights = optimize_portfolio(
++            _expected_returns(),
++            _covariance_matrix(),
++            method="max_sharpe",
++            max_weight=0.6,
++        )
++
++    assert weights.sum() == pytest.approx(1.0)
++    assert set(seen_ftols) == {SOLVER_FTOL_LADDER[0]}
++    assert _events(caplog, "optimizer_tolerance_relaxed") == []
++
++
++def test_relaxed_tolerance_is_used_when_strict_solve_fails(
++    monkeypatch: pytest.MonkeyPatch,
++    caplog: pytest.LogCaptureFixture,
++) -> None:
++    seen_ftols = _install_fake_minimize(monkeypatch, loosest_failing_ftol=1e-12)
++
++    with caplog.at_level(logging.WARNING):
++        weights = optimize_portfolio(
++            _expected_returns(),
++            _covariance_matrix(),
++            method="max_sharpe",
++            max_weight=0.6,
++        )
++
++    assert weights.sum() == pytest.approx(1.0)
++    assert weights.max() <= 0.6 + 1e-8
++    assert seen_ftols[0] == SOLVER_FTOL_LADDER[0]
++    assert seen_ftols[-1] == SOLVER_FTOL_LADDER[1]
++    relaxed_events = _events(caplog, "optimizer_tolerance_relaxed")
++    assert len(relaxed_events) == 1
++    assert relaxed_events[0].ftol_used == SOLVER_FTOL_LADDER[1]
++
++
++def test_failure_is_raised_only_after_every_tolerance_was_tried(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    seen_ftols = _install_fake_minimize(monkeypatch, loosest_failing_ftol=1.0)
++
++    with pytest.raises(ValueError, match="Optimization failed"):
++        optimize_portfolio(
++            _expected_returns(),
++            _covariance_matrix(),
++            method="max_sharpe",
++            max_weight=0.6,
++        )
++
++    assert set(seen_ftols) == set(SOLVER_FTOL_LADDER)

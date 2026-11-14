@@ -1,0 +1,133 @@
+diff --git a/README.md b/README.md
+index fb0614f..da4f7ac 100644
+--- a/README.md
++++ b/README.md
+@@ -181,6 +181,8 @@ The HTML report is generated from pipeline outputs, not notebook state.
+ - Every Sharpe comparison comes with a 95% stationary-bootstrap confidence interval for the Sharpe difference (report assumption line `Statistical uncertainty:`; all benchmarks in `reports/metrics/backtest_metrics.json` under `sharpe_difference_vs_benchmarks`). If the interval contains zero, the sample cannot distinguish the two portfolios.
+ - Backtest reporting separates optimizer targets from realized holdings. The Excel bundle includes `optimizer_target_portfolio` and `latest_realized_portfolio`, plus realized-constraint warnings when contribution-only drift breaches configured caps.
+ - Transaction costs and slippage are modeled, but execution is still simplified relative to live trading.
++- Taxes are not modeled. The optional `investor_profile` config section (horizon, objective, tax preference) is descriptive only: no calculation reads it.
++- `optimization.default_max_weight_per_etf` applies only to tickers without an entry in `constraints.ticker_bounds`. In `configs/base.yaml` every ticker has its own bounds, so the default has no effect there.
+ - Reporting is code-generated; notebooks are research interfaces only.
+ - Metrics JSON is written as strict JSON: non-finite values are sanitized, NumPy scalars are unwrapped, pandas timestamps are serialized, and output is written with `allow_nan=False`.
+ - ML is disabled by default (`ml.enabled: false`). Enabling it creates research artifacts only; the persisted model is labeled by training scope and remains gated by governance before any portfolio use.
+diff --git a/configs/base.yaml b/configs/base.yaml
+index 7779e96..3a80489 100644
+--- a/configs/base.yaml
++++ b/configs/base.yaml
+@@ -40,6 +40,8 @@ data:
+     max_relative_divergence: 0.005
+     min_overlap_observations: 20
+ 
++# DESCRIPTIVE ONLY: no calculation reads this section. It does not change the
++# optimizer, the backtest, costs, or any metric. Taxes are not modeled.
+ investor_profile:
+   horizon_years: 35
+   objective: long_term_accumulation
+@@ -47,6 +49,8 @@ investor_profile:
+ 
+ optimization:
+   long_only: true
++  # Cap for tickers WITHOUT an entry in constraints.ticker_bounds. NO EFFECT in this file:
++  # every ticker has its own bounds below (for example VTI may reach 0.60).
+   default_max_weight_per_etf: 0.25
+   risk_model: ledoit_wolf
+   expected_return_estimator: historical_mean
+diff --git a/pyproject.toml b/pyproject.toml
+index 32d7c0a..4bbda82 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -19,7 +19,6 @@ dependencies = [
+   "plotly",
+   "pyarrow",
+   "pydantic",
+-  "pyportfolioopt",
+   "pyyaml",
+   "scikit-learn",
+   "scipy",
+diff --git a/src/etf_portfolio/config.py b/src/etf_portfolio/config.py
+index 89bf7cd..99281b6 100644
+--- a/src/etf_portfolio/config.py
++++ b/src/etf_portfolio/config.py
+@@ -178,6 +178,13 @@ class DataConfig(BaseModel):
+ 
+ 
+ class InvestorProfileConfig(BaseModel):
++    """Descriptive context about the intended investor. No calculation reads this.
++
++    The horizon, objective and tax preference are recorded for the reader only. They
++    do not change the optimizer, the backtest, costs, or any metric, and no tax is
++    modeled anywhere in the pipeline.
++    """
++
+     horizon_years: int = Field(gt=0)
+     objective: str
+     tax_preference: str
+@@ -497,7 +504,7 @@ class AppConfig(BaseModel):
+     universe: UniverseConfig
+     benchmark: BenchmarkConfig
+     data: DataConfig
+-    investor_profile: InvestorProfileConfig
++    investor_profile: InvestorProfileConfig | None = None
+     optimization: OptimizationConfig
+     constraints: ConstraintsConfig
+     rebalance: RebalanceConfig
+diff --git a/tests/unit/test_dead_config_documented.py b/tests/unit/test_dead_config_documented.py
+new file mode 100644
+index 0000000..d04c959
+--- /dev/null
++++ b/tests/unit/test_dead_config_documented.py
+@@ -0,0 +1,53 @@
++"""Tests that settings with no effect are labeled as such and unused dependencies stay out."""
++
++from __future__ import annotations
++
++import tomllib
++from pathlib import Path
++
++from etf_portfolio.config import InvestorProfileConfig, load_config
++
++REPO_ROOT = Path(__file__).parents[2]
++
++INVESTOR_PROFILE_BLOCK = """investor_profile:
++  horizon_years: 35
++  objective: long_term_accumulation
++  tax_preference: minimize_realized_gains
++"""
++
++
++def test_investor_profile_is_optional(tiny_project: Path) -> None:
++    config_path = tiny_project / "configs/base.yaml"
++    original = config_path.read_text(encoding="utf-8")
++    assert INVESTOR_PROFILE_BLOCK in original
++    config_path.write_text(original.replace(INVESTOR_PROFILE_BLOCK, ""), encoding="utf-8")
++
++    config = load_config(config_path)
++
++    assert config.investor_profile is None
++
++
++def test_investor_profile_still_loads_when_present(tiny_project: Path) -> None:
++    config = load_config(tiny_project / "configs/base.yaml")
++
++    assert isinstance(config.investor_profile, InvestorProfileConfig)
++    assert config.investor_profile.horizon_years == 35
++
++
++def test_investor_profile_docstring_says_it_has_no_effect() -> None:
++    assert "No calculation reads" in (InvestorProfileConfig.__doc__ or "")
++
++
++def test_base_config_labels_settings_that_have_no_effect() -> None:
++    text = (REPO_ROOT / "configs/base.yaml").read_text(encoding="utf-8")
++
++    assert "DESCRIPTIVE ONLY" in text
++    assert "NO EFFECT in this file" in text
++    load_config(REPO_ROOT / "configs/base.yaml")
++
++
++def test_pyportfolioopt_is_not_a_declared_dependency() -> None:
++    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
++
++    declared = [dependency.lower() for dependency in pyproject["project"]["dependencies"]]
++    assert not any(dependency.startswith("pyportfolioopt") for dependency in declared)

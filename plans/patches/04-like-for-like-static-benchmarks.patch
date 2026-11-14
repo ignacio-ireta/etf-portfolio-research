@@ -1,0 +1,266 @@
+diff --git a/README.md b/README.md
+index 3ec94ab..0b69be8 100644
+--- a/README.md
++++ b/README.md
+@@ -170,7 +170,7 @@ The HTML report is generated from pipeline outputs, not notebook state.
+ - Contribution-only allocation never sells unless a fallback/hard-constraint policy is triggered. Cash is routed to under-weight gaps first; if a contribution exceeds all gaps, surplus cash is invested by target weights and can include previously over-weight assets.
+ - In `tolerance_band` mode, ticker or asset-class band breaches trigger a constrained projection so realized weights satisfy the configured ticker and available asset-class drift bands around the optimizer target.
+ - Optimized benchmark objectives use the same rebalance mode, contribution amount, initial capital, cost assumptions, constraints, and schedule as the main strategy. In a contribution-only run, they are contribution-only benchmark simulations, not full-rebalance theoretical portfolios.
+-- The selected benchmark ETF and configured secondary allocation benchmarks are external/theoretical return-series baselines and do not model contribution-only drift or strategy transaction costs.
++- The selected benchmark ETF is a single-fund buy-and-hold return series. Configured secondary allocation benchmarks (for example 60/40) drift between rebalance dates, are reset to their fixed weights on the same rebalance dates as the strategy, and pay the same transaction cost/slippage rate on the traded weight. They do not model contributions, and no initial purchase cost is charged to them.
+ - The report frontier uses the same constraint bundle as optimization and walk-forward backtesting: asset classes, asset-class bounds, ticker bounds, bond floor, and expense-ratio inputs are passed through consistently.
+ - Backtest reporting separates optimizer targets from realized holdings. The Excel bundle includes `optimizer_target_portfolio` and `latest_realized_portfolio`, plus realized-constraint warnings when contribution-only drift breaches configured caps.
+ - Transaction costs and slippage are modeled, but execution is still simplified relative to live trading.
+diff --git a/docs/assumptions_and_limitations.md b/docs/assumptions_and_limitations.md
+index d0ef2e1..782582a 100644
+--- a/docs/assumptions_and_limitations.md
++++ b/docs/assumptions_and_limitations.md
+@@ -109,7 +109,7 @@ Benchmark choice strongly affects interpretation.
+ 
+ Optimized benchmark objectives, such as equal-weight, inverse-volatility, minimum-variance, maximum-Sharpe, and risk-parity benchmarks, use the same rebalance mode, contribution amount, initial capital, cost assumptions, constraints, and rebalance schedule as the main strategy. In a `contribution_only` run, those optimized benchmarks are also contribution-only simulations rather than full-rebalance theoretical portfolios.
+ 
+-The selected benchmark ETF and configured secondary allocation benchmarks are external/theoretical return-series baselines. They do not model contribution-only drift or strategy transaction costs.
++The selected benchmark ETF is a single-fund buy-and-hold return series. Configured secondary allocation benchmarks drift between rebalance dates, are reset to their fixed weights on the same rebalance dates as the strategy, and pay the same transaction cost/slippage rate on the traded weight. They do not model contribution-only drift, and no initial purchase cost is charged to them.
+ 
+ A good benchmark should be:
+ 
+diff --git a/docs/how_to_read_the_report.md b/docs/how_to_read_the_report.md
+index 75bdea6..3161450 100644
+--- a/docs/how_to_read_the_report.md
++++ b/docs/how_to_read_the_report.md
+@@ -138,7 +138,7 @@ This section compares the researched portfolio against benchmark alternatives.
+ 
+ Note that **optimized benchmarks** (like Equal-Weight, Inverse-Volatility, or Min-Variance) are configured to use the same **rebalance mode** (e.g., contribution-only), contribution amount, initial capital, cost assumptions, constraints, and rebalance schedule as your main strategy. In a contribution-only run, these are contribution-only benchmark simulations, not full-rebalance theoretical optimized portfolios.
+ 
+-The selected benchmark ETF and configured secondary allocation benchmarks are different: they are external/theoretical return-series baselines and do not model contribution-only drift or strategy transaction costs.
++The selected benchmark ETF and configured secondary allocation benchmarks are different. The selected benchmark ETF is a single-fund buy-and-hold return series. Secondary allocation benchmarks (for example 60/40) drift between rebalance dates, are reset to their fixed weights on the same rebalance dates as the strategy, and pay the same transaction cost/slippage rate on the traded weight. Neither kind models contribution-only drift, and no initial purchase cost is charged to them.
+ 
+ Use it to ask:
+ 
+diff --git a/docs/methodology.md b/docs/methodology.md
+index d32778a..415f710 100644
+--- a/docs/methodology.md
++++ b/docs/methodology.md
+@@ -95,7 +95,7 @@ To ensure backtest comparisons are defensible, optimized benchmarks (such as Equ
+ 
+ The chosen project policy is therefore to compare contribution-only implementation against contribution-only optimized benchmarks, not against full-rebalance theoretical optimized benchmarks.
+ 
+-Constant-weight benchmarks (like 60/40, configured secondary allocation benchmarks, or single ETFs) remain theoretical return-series baselines. They do not model contribution-only drift, strategy transaction costs, or rebalance-date implementation mechanics unless a future config explicitly adds those assumptions.
++Fixed-allocation benchmarks (like 60/40 and the other configured secondary allocation benchmarks) are simulated on the strategy's rebalance schedule: holdings drift between rebalance dates, are reset to the fixed weights on each rebalance date, and pay the strategy's transaction cost/slippage rate on the traded weight, charged on the next return date. Single-ETF benchmarks are buy-and-hold return series. Neither kind models contribution-only drift, and no initial purchase cost is charged to them.
+ 
+ ## Execution Timing Assumptions
+ 
+diff --git a/src/etf_portfolio/cli.py b/src/etf_portfolio/cli.py
+index f572a36..4a23068 100644
+--- a/src/etf_portfolio/cli.py
++++ b/src/etf_portfolio/cli.py
+@@ -1286,9 +1286,11 @@ def _report_assumptions(
+             "cost/slippage rate, constraints, and rebalance schedule as the main strategy."
+         ),
+         "benchmark_return_series": (
+-            "The selected benchmark ETF and configured secondary allocation benchmarks are "
+-            "external/theoretical return-series baselines; they are not simulated with "
+-            "contribution-only drift or strategy transaction costs."
++            "The selected benchmark ETF is a single-fund buy-and-hold return series. "
++            "Configured secondary allocation benchmarks are reset to their fixed weights on "
++            "the same rebalance dates as the strategy and pay the same transaction "
++            "cost/slippage rate on the traded weight; they are not simulated with "
++            "contribution-only drift, and no initial purchase cost is charged to them."
+         ),
+         "transaction_costs": (
+             "Transaction cost assumptions: "
+@@ -1430,7 +1432,12 @@ def _build_benchmark_suite(
+     for benchmark_name, benchmark_config in config.benchmark.secondary.items():
+         label = _secondary_benchmark_label(benchmark_name)
+         allocations = benchmark_config.allocations
+-        suite[label] = _composite_benchmark_returns(returns, allocations)
++        suite[label] = _static_mix_benchmark_returns(
++            returns,
++            allocations,
++            rebalance_dates=rebalance_dates,
++            transaction_cost_rate=transaction_cost_rate,
++        )
+         benchmark_weights[label] = _constant_benchmark_weights(suite[label].index, allocations)
+     for objective in config.optimization.benchmark_objectives:
+         benchmark_result = run_walk_forward_backtest(
+@@ -1527,13 +1534,37 @@ def _optimization_method_for_objective(objective: OptimizationObjective) -> Opti
+     return method_map[objective]
+ 
+ 
+-def _composite_benchmark_returns(
++def _static_mix_benchmark_returns(
+     returns: pd.DataFrame,
+     allocations: dict[str, float],
++    *,
++    rebalance_dates: pd.DatetimeIndex,
++    transaction_cost_rate: float,
+ ) -> pd.Series:
+-    available = returns.loc[:, list(allocations)]
+-    weights = pd.Series(allocations, dtype=float)
+-    return available.mul(weights, axis=1).sum(axis=1)
++    """Simulate a fixed-allocation benchmark on the strategy's rebalance schedule.
++
++    Holdings drift between rebalance dates. At the close of each rebalance date the
++    mix is reset to `allocations`; the cost of that trade (cost rate times traded
++    weight) is charged on the next return date, the same convention as the strategy
++    engine. No initial purchase cost is charged.
++    """
++
++    available = returns.loc[:, list(allocations)].dropna()
++    target = pd.Series(allocations, dtype=float).reindex(available.columns)
++    schedule = set(pd.DatetimeIndex(rebalance_dates))
++    weights = target.copy()
++    pending_cost = 0.0
++    daily_returns: list[float] = []
++    for date, asset_returns_row in available.iterrows():
++        grown = weights * (1.0 + asset_returns_row)
++        growth = float(grown.sum())
++        daily_returns.append(growth - 1.0 - pending_cost)
++        pending_cost = 0.0
++        weights = grown / growth
++        if date in schedule:
++            pending_cost = transaction_cost_rate * float((target - weights).abs().sum())
++            weights = target.copy()
++    return pd.Series(daily_returns, index=available.index, dtype=float)
+ 
+ 
+ def _constant_benchmark_weights(
+diff --git a/src/etf_portfolio/reporting/report.py b/src/etf_portfolio/reporting/report.py
+index 2ab4078..e457eae 100644
+--- a/src/etf_portfolio/reporting/report.py
++++ b/src/etf_portfolio/reporting/report.py
+@@ -1380,7 +1380,8 @@ _DEFAULT_ASSUMPTIONS: tuple[tuple[str, str], ...] = (
+         "benchmark_fairness",
+         "Pipeline optimized benchmark objectives use the same rebalance mode, contribution "
+         "amount, initial capital, costs, constraints, and schedule as the main strategy; "
+-        "single-ETF and fixed-allocation benchmarks are theoretical return-series baselines.",
++        "fixed-allocation benchmarks are reset on the same rebalance dates and pay the same "
++        "cost rate; the single-ETF benchmark is a buy-and-hold return series.",
+     ),
+     (
+         "optimization",
+diff --git a/tests/unit/test_cli_pipeline.py b/tests/unit/test_cli_pipeline.py
+index 4980555..a85e279 100644
+--- a/tests/unit/test_cli_pipeline.py
++++ b/tests/unit/test_cli_pipeline.py
+@@ -116,7 +116,7 @@ def test_cli_pipeline_stages_create_expected_artifacts(
+     assert "Maximum ETF weight: 50.00%" not in latest_report_html
+     assert "same rebalance mode (contribution_only)" in latest_report_html
+     assert "return labeled with the rebalance date remains" in latest_report_html
+-    assert "external/theoretical return-series baselines" in latest_report_html
++    assert "reset to their fixed weights on the same rebalance dates" in latest_report_html
+ 
+     ml_metrics_text = (tmp_path / "reports/ml/metrics.json").read_text(encoding="utf-8")
+     assert "NaN" not in ml_metrics_text
+diff --git a/tests/unit/test_report_generation.py b/tests/unit/test_report_generation.py
+index b118784..6052a05 100644
+--- a/tests/unit/test_report_generation.py
++++ b/tests/unit/test_report_generation.py
+@@ -128,8 +128,8 @@ def test_generate_report_bundle_creates_expected_artifacts(tmp_path) -> None:
+     assert "new weights and trade-cost impact start on the next return date" in report_html
+     assert "Pipeline optimized benchmark objectives use the same rebalance mode" in report_html
+     assert (
+-        "single-ETF and fixed-allocation benchmarks are theoretical return-series baselines"
+-        in report_html
++        "fixed-allocation benchmarks are reset on the same rebalance dates and pay the same "
++        "cost rate" in report_html
+     )
+     assert "Realized Constraint Warnings" in report_html
+     assert "Synthetic dataset for smoke testing." in report_html
+diff --git a/tests/unit/test_static_mix_benchmark.py b/tests/unit/test_static_mix_benchmark.py
+new file mode 100644
+index 0000000..b503835
+--- /dev/null
++++ b/tests/unit/test_static_mix_benchmark.py
+@@ -0,0 +1,91 @@
++"""Tests for fixed-allocation benchmarks simulated on the strategy's rebalance schedule."""
++
++from __future__ import annotations
++
++import numpy as np
++import pandas as pd
++import pytest
++
++from etf_portfolio import cli
++
++
++def _random_returns() -> pd.DataFrame:
++    rng = np.random.default_rng(21)
++    index = pd.bdate_range("2021-01-04", periods=30)
++    return pd.DataFrame(
++        rng.normal(loc=0.0005, scale=0.02, size=(30, 2)),
++        index=index,
++        columns=["AAA", "BBB"],
++    )
++
++
++ALLOCATIONS = {"AAA": 0.6, "BBB": 0.4}
++
++
++def test_without_rebalance_dates_the_mix_is_buy_and_hold() -> None:
++    returns = _random_returns()
++
++    series = cli._static_mix_benchmark_returns(
++        returns,
++        ALLOCATIONS,
++        rebalance_dates=pd.DatetimeIndex([]),
++        transaction_cost_rate=0.0,
++    )
++
++    weights = pd.Series(ALLOCATIONS)
++    expected_growth = float(((1.0 + returns).prod() * weights).sum())
++    assert float((1.0 + series).prod()) == pytest.approx(expected_growth, rel=1e-12)
++
++
++def test_rebalancing_every_day_for_free_equals_constant_weights() -> None:
++    returns = _random_returns()
++
++    series = cli._static_mix_benchmark_returns(
++        returns,
++        ALLOCATIONS,
++        rebalance_dates=returns.index,
++        transaction_cost_rate=0.0,
++    )
++
++    expected = returns.mul(pd.Series(ALLOCATIONS), axis=1).sum(axis=1)
++    pd.testing.assert_series_equal(series, expected, check_names=False)
++
++
++def test_cost_of_a_rebalance_is_charged_on_the_next_return_date() -> None:
++    index = pd.bdate_range("2021-01-04", periods=3)
++    returns = pd.DataFrame(
++        {"AAA": [0.10, 0.0, 0.0], "BBB": [0.0, 0.0, 0.0]},
++        index=index,
++    )
++
++    series = cli._static_mix_benchmark_returns(
++        returns,
++        {"AAA": 0.5, "BBB": 0.5},
++        rebalance_dates=pd.DatetimeIndex([index[0]]),
++        transaction_cost_rate=0.01,
++    )
++
++    # Day 1: 0.5 * 10% = 5%. Drifted weights: AAA 0.55/1.05, BBB 0.50/1.05.
++    # Rebalancing back to 50/50 trades |0.5 - 0.55/1.05| * 2 of the portfolio.
++    traded_weight = 2.0 * (0.55 / 1.05 - 0.5)
++    assert series.iloc[0] == pytest.approx(0.05)
++    assert series.iloc[1] == pytest.approx(-0.01 * traded_weight)
++    assert series.iloc[2] == pytest.approx(0.0)
++
++
++def test_rebalance_dates_outside_the_data_are_ignored() -> None:
++    returns = _random_returns()
++
++    series = cli._static_mix_benchmark_returns(
++        returns,
++        ALLOCATIONS,
++        rebalance_dates=pd.DatetimeIndex(["1999-01-01"]),
++        transaction_cost_rate=0.01,
++    )
++
++    assert len(series) == len(returns)
++    assert series.index.equals(returns.index)
++
++
++def test_old_costless_daily_rebalanced_helper_is_gone() -> None:
++    assert not hasattr(cli, "_composite_benchmark_returns")

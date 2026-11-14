@@ -1,0 +1,434 @@
+diff --git a/Makefile b/Makefile
+index 8269e3e..8a56dea 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,4 +1,4 @@
+-.PHONY: help sync test test-fast lint format typecheck coverage check precommit run handoff-bundle
++.PHONY: help sync test test-fast lint format typecheck coverage check precommit run sensitivity handoff-bundle
+ 
+ help:
+ 	@echo "Available targets:"
+@@ -12,6 +12,7 @@ help:
+ 	@echo "  check          Run ruff check --fix, ruff format, mypy (advisory), and pytest"
+ 	@echo "  precommit      Run all pre-commit hooks on all files"
+ 	@echo "  run            Run the full pipeline using configs/base.yaml"
++	@echo "  sensitivity    Re-run the backtest over lookback/risk-free/rebalance-mode grids"
+ 	@echo "  handoff-bundle Generate the handoff archive and manifest"
+ 
+ sync:
+@@ -47,5 +48,8 @@ precommit:
+ run:
+ 	uv run etf-portfolio run-all --config configs/base.yaml
+ 
++sensitivity:
++	uv run etf-portfolio sensitivity --config configs/base.yaml
++
+ handoff-bundle:
+ 	uv run python scripts/generate_handoff_bundle.py
+diff --git a/README.md b/README.md
+index b0f375f..fb0614f 100644
+--- a/README.md
++++ b/README.md
+@@ -75,8 +75,13 @@ uv run etf-portfolio optimize --config configs/base.yaml
+ uv run etf-portfolio backtest --config configs/base.yaml
+ uv run etf-portfolio report --config configs/base.yaml
+ uv run etf-portfolio run-all --config configs/base.yaml
++uv run etf-portfolio sensitivity --config configs/base.yaml
+ ```
+ 
++`sensitivity` is not part of `run-all`. It re-runs the backtest over a grid of lookbacks,
++risk-free rates and rebalance modes and writes `reports/metrics/sensitivity.json`
++(see [docs/runbook.md](docs/runbook.md)).
++
+ Global flags (available on every subcommand): `--config`, `--log-level
+ {debug,info,warning,error}`, `--log-file PATH`, and `etf-portfolio --version`.
+ `run-all` additionally accepts `--resume` and `--fail-fast`/`--continue`. The CLI
+diff --git a/docs/output_contract.md b/docs/output_contract.md
+index c37646f..a295412 100644
+--- a/docs/output_contract.md
++++ b/docs/output_contract.md
+@@ -17,6 +17,7 @@ in `CHANGELOG.md`. The constant lives at
+ | Artifact | Path | Description |
+ | --- | --- | --- |
+ | Backtest metrics | `reports/metrics/backtest_metrics.json` | `schema_version`, `run_id`, `provenance_status`, `optimized_strategy` (metric → value), `benchmarks` (name → metrics), `implementation_gap` (`rebalance_count`, `mean_one_way_gap`, `max_one_way_gap`, `latest_one_way_gap`, `rebalances_with_constraint_violation`), `sharpe_difference_vs_benchmarks` (benchmark name → `sharpe_difference`, `ci_lower`, `ci_upper`, `probability_not_positive`, `confidence_level`, `n_observations`, `n_resamples`, `mean_block_length`, `seed`), `run_record` (relative path) |
++| Sensitivity grid | `reports/metrics/sensitivity.json` | Written only by the `sensitivity` command: `schema_version`, `run_id`, `optimization_method`, `benchmark`, `common_start_date`, `end_date`, `configured`, `summary` (`run_count`, `ok_count`, `sharpe_min`, `sharpe_max`, `share_of_runs_beating_benchmark`), `runs` (one row per lookback × risk-free rate × rebalance mode) |
+ | Validation summary | `reports/metrics/validation_summary.json` | `schema_version`, `missing_data_fraction`, `history_coverage`, `suspicious_jump_count` |
+ | Run record | `reports/runs/<stage>_<run_id>.json` | `schema_version`, `pipeline_steps`, `git_commit_hash`, `config_hash`, `universe_id`, `data_version`, `output_artifacts` (name → {path, exists, sha256}), method metadata; backtest records also carry `lookback_periods` (observations actually used), `configured_lookback_periods`, and `configured_backtest_start_date` |
+ | Pipeline state | `reports/runs/pipeline_state.json` | Per-stage `status`, `input_hash`, `outputs` (path → sha256), timestamps; drives `--resume` |
+diff --git a/docs/runbook.md b/docs/runbook.md
+index 93c0f71..fdc63d9 100644
+--- a/docs/runbook.md
++++ b/docs/runbook.md
+@@ -151,3 +151,33 @@ When adding ETFs, check:
+ - Use `enforce_hard` when realized caps must remain hard: contribution-only will allow sell-based fallback rebalances when a realized ticker/class/bond cap is breached.
+ - `rebalance.fallback_sell_allowed` plus `rebalance.fallback.sell_allowed_if_absolute_drift_exceeds` remains available for threshold-based sell fallbacks unrelated to hard-cap enforcement.
+ - Metrics artifacts are strict JSON and should parse cleanly with `json.loads`; literal `NaN` or `Infinity` in metrics files indicates a regression.
++
++## How To Check Sensitivity To Arbitrary Choices
++
++One backtest is one draw. Before trusting a headline number, check how much it moves when
++choices that have no "right" value are changed:
++
++```bash
++uv run etf-portfolio sensitivity --config configs/base.yaml
++```
++
++This re-runs the walk-forward backtest for every combination of:
++
++- lookback: 252, 504, 756 and 1260 trading days, plus `backtest.lookback_periods`;
++- risk-free rate: 0%, plus `risk_free.value`;
++- rebalance mode: `rebalance.mode`, plus `full_rebalance`.
++
++It writes `reports/metrics/sensitivity.json` and nothing else (the main report and
++`backtest_metrics.json` are not touched). With `configs/base.yaml` it takes well under a minute.
++
++Reading the file:
++
++- Every row in `runs` is scored on the **same** window, starting at `common_start_date`
++  (the latest first-return date across all runs), so rows are comparable.
++- `summary.sharpe_min` and `summary.sharpe_max` show the spread. If the spread is as large
++  as the advantage you care about, that advantage depends on an arbitrary choice.
++- `summary.share_of_runs_beating_benchmark` is the fraction of runs whose Sharpe ratio is
++  above the primary benchmark's on the same window and at the same risk-free rate.
++- Rows with `status` `insufficient_history` or `failed` have `null` metrics and a `reason`.
++
++Record the outcome in `docs/research_log.md` whenever a headline result is published.
+diff --git a/src/etf_portfolio/cli.py b/src/etf_portfolio/cli.py
+index d4c4086..b46f4fd 100644
+--- a/src/etf_portfolio/cli.py
++++ b/src/etf_portfolio/cli.py
+@@ -14,7 +14,10 @@ from plotly.io import write_html
+ from etf_portfolio import __version__
+ from etf_portfolio.backtesting.engine import run_walk_forward_backtest
+ from etf_portfolio.backtesting.metrics import (
++    cagr,
+     calculate_sharpe_ratio,
++    portfolio_volatility,
++    sharpe_ratio,
+     summarize_implementation_gap,
+ )
+ from etf_portfolio.backtesting.uncertainty import bootstrap_sharpe_difference
+@@ -74,6 +77,10 @@ from etf_portfolio.tracking import (
+ BACKTEST_START_DELAY_WARNING_DAYS = 45
+ OPTIMIZER_TARGET_LABEL = "Optimizer Target (Full Rebalance)"
+ IMPLEMENTATION_GAP_WARNING_THRESHOLD = 0.10
++# Default grids for the `sensitivity` command. The configured lookback and risk-free
++# rate are always added to these.
++SENSITIVITY_LOOKBACK_PERIODS: tuple[int, ...] = (252, 504, 756, 1260)
++SENSITIVITY_RISK_FREE_RATES: tuple[float, ...] = (0.0,)
+ LOGGER = get_logger(__name__)
+ FIXED_INCOME_ASSET_CLASS = "fixed_income"
+ ML_MODEL_TRAINING_SCOPE = "train_split"
+@@ -131,6 +138,8 @@ def main(argv: list[str] | None = None) -> int:
+             )
+         elif args.command == "ml":
+             run_ml(config_path, project_root=project_root, run_id=run_id)
++        elif args.command == "sensitivity":
++            run_sensitivity(config_path, project_root=project_root, run_id=run_id)
+         else:
+             run_backtest(
+                 config_path,
+@@ -931,6 +940,197 @@ def run_all(
+     }
+ 
+ 
++def run_sensitivity(
++    config_path: str | Path,
++    *,
++    project_root: Path = Path("."),
++    run_id: str | None = None,
++    lookback_grid: tuple[int, ...] | None = None,
++    risk_free_grid: tuple[float, ...] | None = None,
++) -> Path:
++    """Re-run the backtest over a grid of lookbacks, risk-free rates and rebalance modes.
++
++    Every successful run is scored on the same evaluation window (starting at the
++    latest first-return date across runs), so the rows are comparable. The result is
++    written to reports/metrics/sensitivity.json. This command never touches the main
++    report or the main metrics file.
++    """
++
++    config = _load_project_config(config_path, project_root)
++    stage_run_id = run_id or generate_run_id("sensitivity")
++    returns = pd.read_parquet(project_root / "data/processed/returns.parquet")
++    metadata = load_etf_universe_metadata(_metadata_path(project_root)).set_index("ticker")
++    asset_returns = _asset_returns(returns, config)
++    benchmark_returns = _benchmark_returns(returns, config)
++    common_dates = asset_returns.index.intersection(benchmark_returns.index)
++    asset_returns = asset_returns.loc[common_dates]
++    benchmark_returns = benchmark_returns.loc[common_dates]
++    windowed_asset_returns, benchmark_returns = _apply_backtest_window(
++        asset_returns,
++        benchmark_returns,
++        config,
++    )
++    asset_returns = _history_through_backtest_end(asset_returns, config)
++    rebalance_dates = _rebalance_dates(
++        windowed_asset_returns.index,
++        config.rebalance.frequency,
++    )
++    constraints = _build_optimization_constraints(config, metadata, asset_returns.columns)
++    method = _select_optimization_method(config)
++    fallback_drift_threshold = (
++        config.rebalance.fallback.sell_allowed_if_absolute_drift_exceeds
++        if config.rebalance.fallback is not None
++        else None
++    )
++
++    configured_risk_free = get_risk_free_rate(config)
++    lookbacks = sorted(
++        {
++            *(SENSITIVITY_LOOKBACK_PERIODS if lookback_grid is None else lookback_grid),
++            config.backtest.lookback_periods,
++        }
++    )
++    risk_free_rates = sorted(
++        {
++            *(SENSITIVITY_RISK_FREE_RATES if risk_free_grid is None else risk_free_grid),
++            configured_risk_free,
++        }
++    )
++    rebalance_modes = list(dict.fromkeys([config.rebalance.mode, "full_rebalance"]))
++
++    runs: list[dict[str, Any]] = []
++    run_returns: dict[int, pd.Series] = {}
++    for lookback in lookbacks:
++        for risk_free_rate in risk_free_rates:
++            for rebalance_mode in rebalance_modes:
++                row: dict[str, Any] = {
++                    "lookback_periods": int(lookback),
++                    "risk_free_rate": float(risk_free_rate),
++                    "rebalance_mode": rebalance_mode,
++                    "status": "ok",
++                    "reason": None,
++                    "first_return_date": None,
++                    "evaluation_start_date": None,
++                    "cagr": None,
++                    "annualized_volatility": None,
++                    "sharpe_ratio": None,
++                    "benchmark_sharpe_ratio": None,
++                    "sharpe_minus_benchmark": None,
++                }
++                runs.append(row)
++                if lookback > len(asset_returns.index) - 1:
++                    row["status"] = "insufficient_history"
++                    row["reason"] = (
++                        f"lookback {lookback} exceeds the {len(asset_returns.index)} "
++                        "available return observations."
++                    )
++                    continue
++                try:
++                    result = run_walk_forward_backtest(
++                        asset_returns,
++                        rebalance_dates=rebalance_dates,
++                        lookback_periods=int(lookback),
++                        optimization_method=method,
++                        max_weight=config.optimization.default_max_weight_per_etf,
++                        transaction_cost_rate=_transaction_cost_rate(config),
++                        asset_classes=constraints["asset_classes"],
++                        asset_class_bounds=constraints["asset_class_bounds"],
++                        ticker_bounds=constraints["ticker_bounds"],
++                        bond_assets=constraints["bond_assets"],
++                        min_bond_exposure=constraints["min_bond_exposure"],
++                        expense_ratios=constraints["expense_ratios"],
++                        risk_free_rate=float(risk_free_rate),
++                        rebalance_mode=rebalance_mode,
++                        contribution_amount=config.rebalance.contribution_amount,
++                        tolerance_bands=config.rebalance.tolerance_bands,
++                        initial_capital=config.backtest.initial_capital,
++                        fallback_sell_allowed=config.rebalance.fallback_sell_allowed,
++                        fallback_drift_threshold=fallback_drift_threshold,
++                        realized_constraint_policy=config.rebalance.realized_constraint_policy,
++                        covariance_method=config.optimization.risk_model,
++                        expected_return_method=config.optimization.expected_return_estimator,
++                    )
++                except ValueError as exc:
++                    row["status"] = "failed"
++                    row["reason"] = str(exc)
++                    continue
++                run_returns[len(runs) - 1] = result.portfolio_returns
++                row["first_return_date"] = result.portfolio_returns.index.min().date().isoformat()
++
++    if not run_returns:
++        raise InsufficientHistoryError(
++            "No sensitivity run could be completed. Every lookback in the grid is longer "
++            "than the available return history, or every run failed."
++        )
++
++    common_start = max(series.index.min() for series in run_returns.values())
++    for position, series in run_returns.items():
++        row = runs[position]
++        evaluated = series.loc[series.index >= common_start]
++        benchmark_window = benchmark_returns.reindex(evaluated.index).dropna()
++        evaluated = evaluated.reindex(benchmark_window.index)
++        strategy_sharpe = sharpe_ratio(
++            evaluated,
++            risk_free_rate=row["risk_free_rate"],
++            periods_per_year=252,
++        )
++        benchmark_sharpe = sharpe_ratio(
++            benchmark_window,
++            risk_free_rate=row["risk_free_rate"],
++            periods_per_year=252,
++        )
++        row["evaluation_start_date"] = common_start.date().isoformat()
++        row["cagr"] = cagr(evaluated, periods_per_year=252)
++        row["annualized_volatility"] = portfolio_volatility(evaluated, periods_per_year=252)
++        row["sharpe_ratio"] = strategy_sharpe
++        row["benchmark_sharpe_ratio"] = benchmark_sharpe
++        row["sharpe_minus_benchmark"] = strategy_sharpe - benchmark_sharpe
++
++    ok_runs = [row for row in runs if row["status"] == "ok"]
++    sharpe_values = [float(row["sharpe_ratio"]) for row in ok_runs]
++    payload: dict[str, Any] = {
++        "schema_version": OUTPUT_SCHEMA_VERSION,
++        "run_id": stage_run_id,
++        "optimization_method": method,
++        "benchmark": config.benchmark.primary,
++        "common_start_date": common_start.date().isoformat(),
++        "end_date": asset_returns.index.max().date().isoformat(),
++        "configured": {
++            "lookback_periods": config.backtest.lookback_periods,
++            "risk_free_rate": configured_risk_free,
++            "rebalance_mode": config.rebalance.mode,
++        },
++        "summary": {
++            "run_count": len(runs),
++            "ok_count": len(ok_runs),
++            "sharpe_min": min(sharpe_values),
++            "sharpe_max": max(sharpe_values),
++            "share_of_runs_beating_benchmark": sum(
++                1 for row in ok_runs if float(row["sharpe_minus_benchmark"]) > 0.0
++            )
++            / len(ok_runs),
++        },
++        "runs": runs,
++    }
++    output_path = project_root / "reports/metrics/sensitivity.json"
++    output_path.parent.mkdir(parents=True, exist_ok=True)
++    write_metrics_json(payload, output_path)
++    log_event(
++        LOGGER,
++        logging.INFO,
++        "pipeline_stage_completed",
++        run_id=stage_run_id,
++        stage="sensitivity",
++        config_path=str(config_path),
++        run_count=len(runs),
++        ok_count=len(ok_runs),
++        sharpe_min=min(sharpe_values),
++        sharpe_max=max(sharpe_values),
++        output_path=str(output_path),
++    )
++    return output_path
++
++
+ def _default_log_file(args: argparse.Namespace, project_root: Path, run_id: str) -> Path | None:
+     """Return the per-run log path for run-all (persistent traceability), else None."""
+ 
+@@ -1237,7 +1437,7 @@ def _build_parser() -> argparse.ArgumentParser:
+         help="Write structured JSON logs to this file in addition to stderr.",
+     )
+ 
+-    for command_name in ("ingest", "validate", "features", "optimize", "ml"):
++    for command_name in ("ingest", "validate", "features", "optimize", "ml", "sensitivity"):
+         subparsers.add_parser(command_name, parents=[common])
+ 
+     lookback_help = (
+diff --git a/tests/unit/test_sensitivity_command.py b/tests/unit/test_sensitivity_command.py
+new file mode 100644
+index 0000000..d445aa0
+--- /dev/null
++++ b/tests/unit/test_sensitivity_command.py
+@@ -0,0 +1,91 @@
++"""Tests for the `sensitivity` command (lookback / risk-free / rebalance-mode grid)."""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++import pandas as pd
++import pytest
++
++from etf_portfolio import cli
++from etf_portfolio.errors import InsufficientHistoryError
++
++
++def _write_processed_data(project_root: Path, prices: pd.DataFrame) -> None:
++    processed = project_root / "data/processed"
++    processed.mkdir(parents=True, exist_ok=True)
++    prices.to_parquet(processed / "prices_validated.parquet")
++    prices.pct_change(fill_method=None).dropna().to_parquet(processed / "returns.parquet")
++
++
++def test_sensitivity_grid_writes_one_row_per_combination(
++    tiny_project: Path, synthetic_prices: pd.DataFrame
++) -> None:
++    _write_processed_data(tiny_project, synthetic_prices)
++
++    output_path = cli.run_sensitivity(
++        "configs/base.yaml",
++        project_root=tiny_project,
++        lookback_grid=(5, 10),
++        risk_free_grid=(0.0,),
++    )
++
++    assert output_path == tiny_project / "reports/metrics/sensitivity.json"
++    payload = json.loads(output_path.read_text(encoding="utf-8"))
++
++    # Lookbacks: 5, 10 and the configured default 756 (too long for 79 returns).
++    # Risk-free: 0.0 (also the configured value). Modes: contribution_only, full_rebalance.
++    assert payload["schema_version"] == "1.0"
++    assert payload["configured"] == {
++        "lookback_periods": 756,
++        "risk_free_rate": 0.0,
++        "rebalance_mode": "contribution_only",
++    }
++    runs = payload["runs"]
++    assert len(runs) == 6
++    ok_runs = [run for run in runs if run["status"] == "ok"]
++    skipped_runs = [run for run in runs if run["status"] == "insufficient_history"]
++    assert len(ok_runs) == 4
++    assert len(skipped_runs) == 2
++    assert {run["lookback_periods"] for run in skipped_runs} == {756}
++    assert {run["rebalance_mode"] for run in ok_runs} == {"contribution_only", "full_rebalance"}
++
++    for run in ok_runs:
++        assert run["evaluation_start_date"] == payload["common_start_date"]
++        assert run["sharpe_minus_benchmark"] == pytest.approx(
++            run["sharpe_ratio"] - run["benchmark_sharpe_ratio"]
++        )
++    for run in skipped_runs:
++        assert run["sharpe_ratio"] is None
++
++    summary = payload["summary"]
++    assert summary["run_count"] == 6
++    assert summary["ok_count"] == 4
++    assert summary["sharpe_min"] <= summary["sharpe_max"]
++    assert 0.0 <= summary["share_of_runs_beating_benchmark"] <= 1.0
++
++
++def test_sensitivity_fails_clearly_when_no_combination_can_run(
++    tiny_project: Path, synthetic_prices: pd.DataFrame
++) -> None:
++    _write_processed_data(tiny_project, synthetic_prices)
++
++    with pytest.raises(InsufficientHistoryError, match="No sensitivity run"):
++        cli.run_sensitivity(
++            "configs/base.yaml",
++            project_root=tiny_project,
++            lookback_grid=(5000,),
++            risk_free_grid=(0.0,),
++        )
++
++
++def test_sensitivity_command_is_wired_into_the_cli(
++    tiny_project: Path, synthetic_prices: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    _write_processed_data(tiny_project, synthetic_prices)
++    monkeypatch.setattr(cli, "SENSITIVITY_LOOKBACK_PERIODS", (5,))
++    monkeypatch.setattr(cli, "SENSITIVITY_RISK_FREE_RATES", (0.0,))
++
++    assert cli.main(["sensitivity", "--config", "configs/base.yaml"]) == 0
++    assert (tiny_project / "reports/metrics/sensitivity.json").exists()

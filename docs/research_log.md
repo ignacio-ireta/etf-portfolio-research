@@ -72,3 +72,33 @@ The repository needs a minimum documentation set tied to the implemented pipelin
 ### Decision
 
 adopt
+
+### Date
+
+`2026-11-14`
+
+### Hypothesis
+
+After the audit remediation (plans 01 to 09), the max-Sharpe contribution-only strategy has a risk-adjusted advantage over VT that is distinguishable from noise and that comes from the optimizer.
+
+### Config
+
+- run ID `backtest-20261114T031301Z-ee163e1c` (run record: `reports/runs/backtest_backtest-20261114T031301Z-ee163e1c.json`)
+- config hash `551ea46127e7ba59ec6c5ebd3693d55245d1e428ca2ec9e8804304bc6c80ed76`, git commit `db4377eddc2aea6c206203a0b4f578bc6eae67ff`
+- objective `max_sharpe`, lookback 756 observations, simulated window 2014-02-03 to 2026-04-24 (configured start 2012-01-01)
+
+### Result
+
+- Optimized Strategy: CAGR 10.36%, volatility 11.33%, Sharpe 0.66, max drawdown -24.98%
+- Primary benchmark (VT): CAGR 10.71%, Sharpe 0.51
+- Sharpe difference versus primary benchmark: +0.15, 95% bootstrap interval [-0.06, +0.36] (contains zero)
+- Optimizer Target (Full Rebalance): Sharpe 0.60; strategy minus target: +0.06, 95% bootstrap interval [-0.06, +0.22] (contains zero)
+- Implementation gap: mean 26.1%, max 46.9% (one-way); configured constraints broken at 146 of 147 rebalances
+- Sensitivity grid (16 of 16 runs completed, common window from 2016-02-01): Sharpe from 0.67 to 1.04; 100% of runs above the primary benchmark
+- Artifacts: `reports/metrics/backtest_metrics.json`, `reports/html/latest_report.html`, `reports/metrics/sensitivity.json`
+
+### Decision
+
+revisit later
+
+Reason: The Sharpe difference versus the primary benchmark is not distinguishable from sampling noise. Do not describe this run as outperformance.

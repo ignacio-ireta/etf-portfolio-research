@@ -48,6 +48,11 @@ LOGGER = get_logger(__name__)
 DEFAULT_SOLVER = "SLSQP"
 COVARIANCE_SYMMETRY_TOLERANCE = 1e-10
 COVARIANCE_PSD_TOLERANCE = 1e-10
+# SLSQP convergence tolerances, tried in order. The first entry is the strict default.
+# A later entry is used only when every start point failed at the previous one
+# (typically "Positive directional derivative for linesearch": the solver is at the
+# optimum but cannot certify it at the stricter tolerance).
+SOLVER_FTOL_LADDER = (1e-12, 1e-10, 1e-8, 1e-6)
 
 
 def optimize_portfolio(
@@ -186,7 +191,7 @@ def optimize_portfolio(
         weight_sum=weight_sum,
         linear_constraints=linear_constraints,
     )
-    result = _solve_with_retries(
+    result, ftol_used = _solve_with_retries(
         objective=objective,
         candidate_initial_weights=candidate_initial_weights,
         bounds=bounds,
@@ -210,6 +215,19 @@ def optimize_portfolio(
             tightest_ticker_cap=_tightest_ticker_cap(ticker_bounds),
         )
         raise ValueError(f"Optimization failed: {result.message}")
+
+    if ftol_used != SOLVER_FTOL_LADDER[0]:
+        log_event(
+            LOGGER,
+            logging.WARNING,
+            "optimizer_tolerance_relaxed",
+            method=validated_method,
+            solver_used=DEFAULT_SOLVER,
+            optimizer_status="success",
+            strict_ftol=SOLVER_FTOL_LADDER[0],
+            ftol_used=ftol_used,
+            reason="SLSQP did not converge at the strict tolerance from any start point.",
+        )
 
     weights = pd.Series(result.x, index=assets, dtype=float, name="weight")
     weights[np.abs(weights) < 1e-10] = 0.0
@@ -457,21 +475,30 @@ def _solve_with_retries(
     candidate_initial_weights: Sequence[np.ndarray],
     bounds: Any,
     constraints: Sequence[dict[str, Any]],
-) -> Any:
+) -> tuple[Any, float]:
+    """Solve from each start point, relaxing ftol only when every start point fails.
+
+    Returns `(result, ftol_used)`. A solve that succeeds at the strict tolerance is
+    returned unchanged, so relaxing never alters a result that already converged.
+    """
+
     last_result: Any = None
-    for candidate in candidate_initial_weights:
-        result = minimize(
-            objective,
-            x0=candidate,
-            method="SLSQP",
-            bounds=bounds,
-            constraints=constraints,
-            options={"maxiter": 500, "ftol": 1e-12},
-        )
-        last_result = result
-        if result.success:
-            return result
-    return last_result
+    last_ftol = SOLVER_FTOL_LADDER[0]
+    for ftol in SOLVER_FTOL_LADDER:
+        for candidate in candidate_initial_weights:
+            result = minimize(
+                objective,
+                x0=candidate,
+                method="SLSQP",
+                bounds=bounds,
+                constraints=constraints,
+                options={"maxiter": 500, "ftol": ftol},
+            )
+            last_result = result
+            last_ftol = ftol
+            if result.success:
+                return result, ftol
+    return last_result, last_ftol
 
 
 def _validate_bound_feasibility(

@@ -109,7 +109,7 @@ Benchmark choice strongly affects interpretation.
 
 Optimized benchmark objectives, such as equal-weight, inverse-volatility, minimum-variance, maximum-Sharpe, and risk-parity benchmarks, use the same rebalance mode, contribution amount, initial capital, cost assumptions, constraints, and rebalance schedule as the main strategy. In a `contribution_only` run, those optimized benchmarks are also contribution-only simulations rather than full-rebalance theoretical portfolios.
 
-The selected benchmark ETF and configured secondary allocation benchmarks are external/theoretical return-series baselines. They do not model contribution-only drift or strategy transaction costs.
+The selected benchmark ETF is a single-fund buy-and-hold return series. Configured secondary allocation benchmarks drift between rebalance dates, are reset to their fixed weights on the same rebalance dates as the strategy, and pay the same transaction cost/slippage rate on the traded weight. They do not model contribution-only drift, and no initial purchase cost is charged to them.
 
 A good benchmark should be:
 

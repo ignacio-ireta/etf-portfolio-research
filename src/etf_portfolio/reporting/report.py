@@ -1291,7 +1291,8 @@ _DEFAULT_ASSUMPTIONS: tuple[tuple[str, str], ...] = (
         "benchmark_fairness",
         "Pipeline optimized benchmark objectives use the same rebalance mode, contribution "
         "amount, initial capital, costs, constraints, and schedule as the main strategy; "
-        "single-ETF and fixed-allocation benchmarks are theoretical return-series baselines.",
+        "fixed-allocation benchmarks are reset on the same rebalance dates and pay the same "
+        "cost rate; the single-ETF benchmark is a buy-and-hold return series.",
     ),
     (
         "optimization",

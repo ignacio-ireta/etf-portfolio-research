@@ -1285,9 +1285,11 @@ def _report_assumptions(
             "cost/slippage rate, constraints, and rebalance schedule as the main strategy."
         ),
         "benchmark_return_series": (
-            "The selected benchmark ETF and configured secondary allocation benchmarks are "
-            "external/theoretical return-series baselines; they are not simulated with "
-            "contribution-only drift or strategy transaction costs."
+            "The selected benchmark ETF is a single-fund buy-and-hold return series. "
+            "Configured secondary allocation benchmarks are reset to their fixed weights on "
+            "the same rebalance dates as the strategy and pay the same transaction "
+            "cost/slippage rate on the traded weight; they are not simulated with "
+            "contribution-only drift, and no initial purchase cost is charged to them."
         ),
         "transaction_costs": (
             "Transaction cost assumptions: "
@@ -1429,7 +1431,12 @@ def _build_benchmark_suite(
     for benchmark_name, benchmark_config in config.benchmark.secondary.items():
         label = _secondary_benchmark_label(benchmark_name)
         allocations = benchmark_config.allocations
-        suite[label] = _composite_benchmark_returns(returns, allocations)
+        suite[label] = _static_mix_benchmark_returns(
+            returns,
+            allocations,
+            rebalance_dates=rebalance_dates,
+            transaction_cost_rate=transaction_cost_rate,
+        )
         benchmark_weights[label] = _constant_benchmark_weights(suite[label].index, allocations)
     for objective in config.optimization.benchmark_objectives:
         benchmark_result = run_walk_forward_backtest(
@@ -1526,13 +1533,37 @@ def _optimization_method_for_objective(objective: OptimizationObjective) -> Opti
     return method_map[objective]
 
 
-def _composite_benchmark_returns(
+def _static_mix_benchmark_returns(
     returns: pd.DataFrame,
     allocations: dict[str, float],
+    *,
+    rebalance_dates: pd.DatetimeIndex,
+    transaction_cost_rate: float,
 ) -> pd.Series:
-    available = returns.loc[:, list(allocations)]
-    weights = pd.Series(allocations, dtype=float)
-    return available.mul(weights, axis=1).sum(axis=1)
+    """Simulate a fixed-allocation benchmark on the strategy's rebalance schedule.
+
+    Holdings drift between rebalance dates. At the close of each rebalance date the
+    mix is reset to `allocations`; the cost of that trade (cost rate times traded
+    weight) is charged on the next return date, the same convention as the strategy
+    engine. No initial purchase cost is charged.
+    """
+
+    available = returns.loc[:, list(allocations)].dropna()
+    target = pd.Series(allocations, dtype=float).reindex(available.columns)
+    schedule = set(pd.DatetimeIndex(rebalance_dates))
+    weights = target.copy()
+    pending_cost = 0.0
+    daily_returns: list[float] = []
+    for date, asset_returns_row in available.iterrows():
+        grown = weights * (1.0 + asset_returns_row)
+        growth = float(grown.sum())
+        daily_returns.append(growth - 1.0 - pending_cost)
+        pending_cost = 0.0
+        weights = grown / growth
+        if date in schedule:
+            pending_cost = transaction_cost_rate * float((target - weights).abs().sum())
+            weights = target.copy()
+    return pd.Series(daily_returns, index=available.index, dtype=float)
 
 
 def _constant_benchmark_weights(

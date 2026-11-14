@@ -116,7 +116,7 @@ def test_cli_pipeline_stages_create_expected_artifacts(
     assert "Maximum ETF weight: 50.00%" not in latest_report_html
     assert "same rebalance mode (contribution_only)" in latest_report_html
     assert "return labeled with the rebalance date remains" in latest_report_html
-    assert "external/theoretical return-series baselines" in latest_report_html
+    assert "reset to their fixed weights on the same rebalance dates" in latest_report_html
 
     ml_metrics_text = (tmp_path / "reports/ml/metrics.json").read_text(encoding="utf-8")
     assert "NaN" not in ml_metrics_text

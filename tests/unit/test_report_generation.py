@@ -128,8 +128,8 @@ def test_generate_report_bundle_creates_expected_artifacts(tmp_path) -> None:
     assert "new weights and trade-cost impact start on the next return date" in report_html
     assert "Pipeline optimized benchmark objectives use the same rebalance mode" in report_html
     assert (
-        "single-ETF and fixed-allocation benchmarks are theoretical return-series baselines"
-        in report_html
+        "fixed-allocation benchmarks are reset on the same rebalance dates and pay the same "
+        "cost rate" in report_html
     )
     assert "Realized Constraint Warnings" in report_html
     assert "Synthetic dataset for smoke testing." in report_html

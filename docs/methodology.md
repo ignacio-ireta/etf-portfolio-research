@@ -95,7 +95,7 @@ To ensure backtest comparisons are defensible, optimized benchmarks (such as Equ
 
 The chosen project policy is therefore to compare contribution-only implementation against contribution-only optimized benchmarks, not against full-rebalance theoretical optimized benchmarks.
 
-Constant-weight benchmarks (like 60/40, configured secondary allocation benchmarks, or single ETFs) remain theoretical return-series baselines. They do not model contribution-only drift, strategy transaction costs, or rebalance-date implementation mechanics unless a future config explicitly adds those assumptions.
+Fixed-allocation benchmarks (like 60/40 and the other configured secondary allocation benchmarks) are simulated on the strategy's rebalance schedule: holdings drift between rebalance dates, are reset to the fixed weights on each rebalance date, and pay the strategy's transaction cost/slippage rate on the traded weight, charged on the next return date. Single-ETF benchmarks are buy-and-hold return series. Neither kind models contribution-only drift, and no initial purchase cost is charged to them.
 
 ## Execution Timing Assumptions
 

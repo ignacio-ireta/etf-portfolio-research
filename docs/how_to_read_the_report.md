@@ -150,7 +150,7 @@ This section compares the researched portfolio against benchmark alternatives.
 
 Note that **optimized benchmarks** (like Equal-Weight, Inverse-Volatility, or Min-Variance) are configured to use the same **rebalance mode** (e.g., contribution-only), contribution amount, initial capital, cost assumptions, constraints, and rebalance schedule as your main strategy. In a contribution-only run, these are contribution-only benchmark simulations, not full-rebalance theoretical optimized portfolios.
 
-The selected benchmark ETF and configured secondary allocation benchmarks are different: they are external/theoretical return-series baselines and do not model contribution-only drift or strategy transaction costs.
+The selected benchmark ETF and configured secondary allocation benchmarks are different. The selected benchmark ETF is a single-fund buy-and-hold return series. Secondary allocation benchmarks (for example 60/40) drift between rebalance dates, are reset to their fixed weights on the same rebalance dates as the strategy, and pay the same transaction cost/slippage rate on the traded weight. Neither kind models contribution-only drift, and no initial purchase cost is charged to them.
 
 Use it to ask:
 

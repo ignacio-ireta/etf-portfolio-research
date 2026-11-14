@@ -201,7 +201,7 @@ def run_walk_forward_backtest(
         if realized_window.empty:
             continue
 
-        segment_returns = realized_window.mul(applied_weights, axis=1).sum(axis=1)
+        segment_returns = _buy_and_hold_returns(realized_window, applied_weights)
         transaction_cost_dollars = transaction_costs(
             decision.trades_dollars,
             cost_rate=transaction_cost_rate,
@@ -293,6 +293,26 @@ def run_walk_forward_backtest(
         realized_constraint_violations=realized_constraint_violations,
         realized_constraint_policy=realized_constraint_policy,
     )
+
+
+def _buy_and_hold_returns(
+    realized_window: pd.DataFrame,
+    applied_weights: pd.Series,
+) -> pd.Series:
+    """Daily portfolio returns when holdings are left untouched inside the window.
+
+    Weights are applied once, at the start of the window, and then drift with each
+    asset's own return. This matches `_drift_weights`, which projects the same
+    untouched holdings to the next rebalance date. Weight that is not allocated to
+    any asset is treated as cash earning zero.
+    """
+
+    holding_values = (1.0 + realized_window).cumprod().mul(applied_weights, axis=1)
+    cash_weight = 1.0 - float(applied_weights.sum())
+    portfolio_values = holding_values.sum(axis=1) + cash_weight
+    previous_values = portfolio_values.shift(1)
+    previous_values.iloc[0] = 1.0
+    return portfolio_values / previous_values - 1.0
 
 
 def _drift_weights(

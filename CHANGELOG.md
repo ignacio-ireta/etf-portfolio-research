@@ -6,6 +6,32 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Audit remediation
+
+Changes from the repository audit (step-by-step plans in `plans/`). Backtest numbers
+change because of the first two items; regenerate reports before quoting any figure.
+
+- **Changed:** the estimation lookback is now `backtest.lookback_periods` in the config
+  (default 756) and is stored in every backtest run record; `--lookback-periods` is an
+  optional override. Returns before `backtest.start_date` are used to warm up the
+  lookback instead of being discarded.
+- **Fixed:** daily returns between rebalance dates are computed as buy-and-hold,
+  consistent with the weight drift, instead of as a costless daily reset.
+- **Fixed:** the optimizer retries SLSQP on a tolerance ladder, so one non-converged
+  month no longer aborts a whole backtest (`optimizer_tolerance_relaxed` warning).
+- **Changed:** fixed-allocation benchmarks (60/40 and other `benchmark.secondary`
+  entries) are simulated on the strategy's rebalance schedule and pay the same cost
+  rate, instead of being rebalanced daily for free.
+- **Added:** `implementation_gap` in the metrics JSON and report assumptions, plus the
+  benchmark row `Optimizer Target (Full Rebalance)`.
+- **Added:** `sharpe_difference_vs_benchmarks` (stationary-bootstrap confidence
+  intervals) in the metrics JSON and a `Statistical uncertainty:` report assumption.
+- **Added:** `etf-portfolio sensitivity` command writing `reports/metrics/sensitivity.json`.
+- **Added:** `scripts/append_research_log_entry.py` to build research-log entries from
+  the pipeline's own outputs.
+- **Removed:** unused `pyportfolioopt` dependency.
+- **Changed:** `investor_profile` is optional and documented as descriptive only.
+
 Brought the project into compliance with the adapted engineering standards
 (`docs/engineering_standards.md`).
 

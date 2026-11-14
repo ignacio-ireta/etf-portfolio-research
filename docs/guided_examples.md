@@ -46,7 +46,7 @@ The default config uses:
 - contribution amount: `1500.0`
 - backtest start date: `2012-01-01`
 
-Because the walk-forward backtest needs trailing lookback data, the current run record reports an effective backtest start date of `2015-01-30`.
+The walk-forward backtest needs `backtest.lookback_periods` (756) trading days of history before its first rebalance. Returns before the configured start date are used for that, but the committed data starts in January 2011, so the first simulated return is in February 2014, not January 2012. The exact date is the `start_date` field of the run record and the `Backtest window` line in the report's assumptions list.
 
 ### Inspect The Artifacts
 

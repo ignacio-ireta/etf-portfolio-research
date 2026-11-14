@@ -345,6 +345,11 @@ class BacktestConfig(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     initial_capital: float = Field(default=100_000.0, gt=0.0)
+    # Number of trailing return observations used to estimate expected returns and
+    # covariance at each rebalance. Returns dated before `start_date` are still used
+    # for estimation, so the lookback does not delay the first rebalance when
+    # enough earlier history exists.
+    lookback_periods: int = Field(default=756, gt=0)
 
     @model_validator(mode="after")
     def _validate_date_range(self) -> BacktestConfig:

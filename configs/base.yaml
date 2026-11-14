@@ -122,9 +122,15 @@ rebalance:
     per_asset_class_abs_drift: 0.10
 
 backtest:
+  # First date on which the strategy may rebalance. Returns before this date are
+  # used only to estimate the first portfolio (lookback warm-up).
   start_date: "2012-01-01"
   end_date: null
   initial_capital: 100000.0
+  # Trailing trading days used for estimation at each rebalance (756 = about 3 years).
+  # If the data does not reach back this far before start_date, the first trade is
+  # delayed and the run logs a `backtest_start_delayed` warning.
+  lookback_periods: 756
 
 costs:
   transaction_cost_bps: 2

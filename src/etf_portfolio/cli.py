@@ -66,7 +66,7 @@ from etf_portfolio.tracking import (
     write_run_record,
 )
 
-DEFAULT_LOOKBACK_PERIODS = 756
+BACKTEST_START_DELAY_WARNING_DAYS = 45
 LOGGER = get_logger(__name__)
 FIXED_INCOME_ASSET_CLASS = "fixed_income"
 ML_MODEL_TRAINING_SCOPE = "train_split"
@@ -430,13 +430,14 @@ def run_backtest(
     config_path: str | Path,
     *,
     project_root: Path = Path("."),
-    lookback_periods: int = DEFAULT_LOOKBACK_PERIODS,
+    lookback_periods: int | None = None,
     run_id: str | None = None,
     persist_metrics: bool = True,
 ) -> tuple[Path, Path]:
     """Run walk-forward backtesting and persist report and metrics artifacts."""
 
     config = _load_project_config(config_path, project_root)
+    configured_lookback = _resolve_lookback_periods(config, lookback_periods)
     stage_run_id = run_id or generate_run_id("backtest")
     tracking_provenance = (
         resolve_run_provenance(config=config, project_root=project_root)
@@ -454,14 +455,21 @@ def run_backtest(
     common_dates = asset_returns.index.intersection(benchmark_returns.index)
     asset_returns = asset_returns.loc[common_dates]
     benchmark_returns = benchmark_returns.loc[common_dates]
-    asset_returns, benchmark_returns = _apply_backtest_window(
+    # Rebalance dates come from the configured backtest window. The estimation history
+    # keeps every return before backtest.start_date so the trailing lookback can warm
+    # up on pre-window data instead of delaying the first rebalance.
+    windowed_asset_returns, benchmark_returns = _apply_backtest_window(
         asset_returns,
         benchmark_returns,
         config,
     )
+    asset_returns = _history_through_backtest_end(asset_returns, config)
 
-    rebalance_dates = _rebalance_dates(asset_returns.index, config.rebalance.frequency)
-    effective_lookback = min(lookback_periods, len(asset_returns.index) - 1)
+    rebalance_dates = _rebalance_dates(
+        windowed_asset_returns.index,
+        config.rebalance.frequency,
+    )
+    effective_lookback = min(configured_lookback, len(asset_returns.index) - 1)
     if effective_lookback <= 0:
         raise InsufficientHistoryError(
             "Not enough return history is available to run the backtest."
@@ -524,6 +532,26 @@ def run_backtest(
 
     aligned_benchmark = benchmark_returns.reindex(backtest_result.portfolio_returns.index).dropna()
     aligned_portfolio = backtest_result.portfolio_returns.reindex(aligned_benchmark.index)
+    effective_start_date = pd.Timestamp(aligned_portfolio.index.min())
+    configured_start_date = config.backtest.start_date
+    if configured_start_date is not None and effective_start_date > pd.Timestamp(
+        configured_start_date
+    ) + pd.Timedelta(days=BACKTEST_START_DELAY_WARNING_DAYS):
+        log_event(
+            LOGGER,
+            logging.WARNING,
+            "backtest_start_delayed",
+            run_id=stage_run_id,
+            stage="backtest",
+            config_path=str(config_path),
+            configured_start_date=configured_start_date.isoformat(),
+            effective_start_date=effective_start_date.date().isoformat(),
+            lookback_periods=effective_lookback,
+            reason=(
+                "Not enough return history before backtest.start_date to fill the "
+                "lookback; the first rebalance was delayed."
+            ),
+        )
     in_sample_returns = asset_returns.loc[asset_returns.index < backtest_result.weights.index[-1]]
     expected_returns = estimate_expected_returns(
         in_sample_returns,
@@ -589,7 +617,13 @@ def run_backtest(
             if validated_prices is not None
             else None
         ),
-        assumptions=_report_assumptions(config, method, run_id=stage_run_id),
+        assumptions=_report_assumptions(
+            config,
+            method,
+            run_id=stage_run_id,
+            lookback_periods=effective_lookback,
+            effective_start_date=effective_start_date,
+        ),
         limitations=_report_limitations(config),
         asset_returns=asset_returns,
         asset_classes=asset_class_map,
@@ -654,6 +688,13 @@ def run_backtest(
             optimization_method=method,
             backtest_metrics=metrics_payload["optimized_strategy"],
             pipeline_steps=["ingest", "validate", "features", "optimize", "backtest"],
+            extra={
+                "lookback_periods": effective_lookback,
+                "configured_lookback_periods": configured_lookback,
+                "configured_backtest_start_date": (
+                    configured_start_date.isoformat() if configured_start_date is not None else None
+                ),
+            },
         )
         written_run_record_path = write_run_record(
             run_record,
@@ -702,7 +743,7 @@ def run_report(
     config_path: str | Path,
     *,
     project_root: Path = Path("."),
-    lookback_periods: int = DEFAULT_LOOKBACK_PERIODS,
+    lookback_periods: int | None = None,
     run_id: str | None = None,
 ) -> Path:
     """Generate the report bundle from the configured pipeline inputs."""
@@ -739,7 +780,7 @@ def run_all(
     config_path: str | Path,
     *,
     project_root: Path = Path("."),
-    lookback_periods: int = DEFAULT_LOOKBACK_PERIODS,
+    lookback_periods: int | None = None,
     run_id: str | None = None,
     resume: bool = False,
     fail_fast: bool = True,
@@ -752,6 +793,7 @@ def run_all(
     """
 
     config = _load_project_config(config_path, project_root)
+    lookback_periods = _resolve_lookback_periods(config, lookback_periods)
     pipeline_run_id = run_id or generate_run_id("run-all")
 
     metadata_path = _metadata_path(project_root)
@@ -1153,14 +1195,18 @@ def _build_parser() -> argparse.ArgumentParser:
     for command_name in ("ingest", "validate", "features", "optimize", "ml"):
         subparsers.add_parser(command_name, parents=[common])
 
+    lookback_help = (
+        "Override backtest.lookback_periods from the config for this run only "
+        "(default: use the config value)."
+    )
     backtest_parser = subparsers.add_parser("backtest", parents=[common])
-    backtest_parser.add_argument("--lookback-periods", type=int, default=DEFAULT_LOOKBACK_PERIODS)
+    backtest_parser.add_argument("--lookback-periods", type=int, default=None, help=lookback_help)
 
     report_parser = subparsers.add_parser("report", parents=[common])
-    report_parser.add_argument("--lookback-periods", type=int, default=DEFAULT_LOOKBACK_PERIODS)
+    report_parser.add_argument("--lookback-periods", type=int, default=None, help=lookback_help)
 
     run_all_parser = subparsers.add_parser("run-all", parents=[common])
-    run_all_parser.add_argument("--lookback-periods", type=int, default=DEFAULT_LOOKBACK_PERIODS)
+    run_all_parser.add_argument("--lookback-periods", type=int, default=None, help=lookback_help)
     run_all_parser.add_argument(
         "--resume",
         action="store_true",
@@ -1213,6 +1259,8 @@ def _report_assumptions(
     optimization_method: str,
     *,
     run_id: str | None = None,
+    lookback_periods: int | None = None,
+    effective_start_date: pd.Timestamp | None = None,
 ) -> dict[str, str]:
     assumptions = {
         "data_provider": f"Data provider: {config.data.provider}",
@@ -1255,6 +1303,19 @@ def _report_assumptions(
             f"Annualized risk-free rate ({config.risk_free.source}): {config.risk_free.value:.2%}"
         ),
     }
+    if lookback_periods is not None and effective_start_date is not None:
+        configured_start = (
+            config.backtest.start_date.isoformat()
+            if config.backtest.start_date is not None
+            else "not set"
+        )
+        assumptions["backtest_window"] = (
+            f"Backtest window: configured start {configured_start}; first simulated return "
+            f"{effective_start_date.date().isoformat()}; trailing lookback "
+            f"{lookback_periods} observations. Returns before the configured start are used "
+            "for estimation only. If the first simulated return is much later than the "
+            "configured start, the data history was too short to fill the lookback."
+        )
     if run_id is not None:
         assumptions["run_id"] = f"Run ID: {run_id}"
     return assumptions
@@ -1291,6 +1352,24 @@ def _benchmark_returns(returns: pd.DataFrame, config: AppConfig) -> pd.Series:
     benchmark = returns.loc[:, config.benchmark.primary].dropna()
     benchmark.name = config.benchmark.primary
     return benchmark
+
+
+def _resolve_lookback_periods(config: AppConfig, override: int | None) -> int:
+    """Return the CLI override when given, otherwise backtest.lookback_periods."""
+
+    lookback_periods = config.backtest.lookback_periods if override is None else int(override)
+    if lookback_periods <= 0:
+        raise ConfigError("lookback_periods must be a positive integer.")
+    return lookback_periods
+
+
+def _history_through_backtest_end(asset_returns: pd.DataFrame, config: AppConfig) -> pd.DataFrame:
+    """Keep estimation history before backtest.start_date; cut only at backtest.end_date."""
+
+    if config.backtest.end_date is None:
+        return asset_returns
+    end = pd.Timestamp(config.backtest.end_date)
+    return asset_returns.loc[asset_returns.index <= end]
 
 
 def _apply_backtest_window(
